@@ -1,0 +1,413 @@
+{
+  "project": {
+    "name": "Флагман: Усадьба Керчь",
+    "totalAreaSqM": 180.0,
+    "buildingCount": 3
+  },
+  "buildings": [
+    {
+      "id": "house_main",
+      "name": "Основной L-Дом",
+      "type": "residential",
+      "facadeMaterial": "white_plaster",
+      "wallHeight": 3.0,
+      "walls": [
+        {
+          "id": "w1",
+          "start": [
+            -3.0,
+            -2.5
+          ],
+          "end": [
+            8.5,
+            -2.5
+          ],
+          "thickness": 0.35,
+          "height": 3.0,
+          "isExterior": true
+        },
+        {
+          "id": "w2",
+          "start": [
+            8.5,
+            -2.5
+          ],
+          "end": [
+            8.5,
+            3.5
+          ],
+          "thickness": 0.35,
+          "height": 3.0,
+          "isExterior": true
+        },
+        {
+          "id": "w3",
+          "start": [
+            8.5,
+            3.5
+          ],
+          "end": [
+            3.5,
+            3.5
+          ],
+          "thickness": 0.35,
+          "height": 3.0,
+          "isExterior": true
+        },
+        {
+          "id": "w4",
+          "start": [
+            3.5,
+            3.5
+          ],
+          "end": [
+            3.5,
+            7.5
+          ],
+          "thickness": 0.35,
+          "height": 3.0,
+          "isExterior": true
+        },
+        {
+          "id": "w5",
+          "start": [
+            3.5,
+            7.5
+          ],
+          "end": [
+            -3.0,
+            7.5
+          ],
+          "thickness": 0.35,
+          "height": 3.0,
+          "isExterior": true
+        },
+        {
+          "id": "w6",
+          "start": [
+            -3.0,
+            7.5
+          ],
+          "end": [
+            -3.0,
+            -2.5
+          ],
+          "thickness": 0.35,
+          "height": 3.0,
+          "isExterior": true
+        },
+        {
+          "id": "w_int_1",
+          "start": [
+            3.5,
+            -2.5
+          ],
+          "end": [
+            3.5,
+            3.5
+          ],
+          "thickness": 0.15,
+          "height": 3.0,
+          "isExterior": false
+        }
+      ],
+      "openings": [
+        {
+          "id": "d_entry",
+          "wallId": "w1",
+          "type": "door",
+          "positionFromStart": 2.0,
+          "width": 1.0,
+          "height": 2.1,
+          "sillHeight": 0.0,
+          "label": "Вход"
+        },
+        {
+          "id": "win_1",
+          "wallId": "w1",
+          "type": "window",
+          "positionFromStart": 6.0,
+          "width": 1.6,
+          "height": 1.5,
+          "sillHeight": 0.9,
+          "label": "Окно кухни"
+        },
+        {
+          "id": "win_2",
+          "wallId": "w2",
+          "type": "window",
+          "positionFromStart": 3.0,
+          "width": 1.8,
+          "height": 1.5,
+          "sillHeight": 0.9,
+          "label": "Окно гостиной"
+        }
+      ],
+      "roof": {
+        "type": "gable",
+        "ridgeAxis": "X",
+        "slopeDeg": 26.0,
+        "overhang": 0.5,
+        "material": "charcoal_tile"
+      },
+      "rooms": [
+        {
+          "id": "room_living",
+          "name": "Гостиная-Столовая",
+          "type": "living",
+          "polygon": [
+            [
+              -3.0,
+              -2.5
+            ],
+            [
+              3.5,
+              -2.5
+            ],
+            [
+              3.5,
+              7.5
+            ],
+            [
+              -3.0,
+              7.5
+            ]
+          ],
+          "areaSqM": 65.0,
+          "floorMaterial": "parquet"
+        },
+        {
+          "id": "room_kitchen",
+          "name": "Кухня и Спальня",
+          "type": "kitchen",
+          "polygon": [
+            [
+              3.5,
+              -2.5
+            ],
+            [
+              8.5,
+              -2.5
+            ],
+            [
+              8.5,
+              3.5
+            ],
+            [
+              3.5,
+              3.5
+            ]
+          ],
+          "areaSqM": 30.0,
+          "floorMaterial": "ceramic_tile"
+        }
+      ]
+    },
+    {
+      "id": "bathhouse",
+      "name": "Баня с террасой",
+      "type": "bathhouse",
+      "facadeMaterial": "wood_timber",
+      "wallHeight": 2.8,
+      "walls": [
+        {
+          "id": "bw1",
+          "start": [
+            -12.0,
+            3.5
+          ],
+          "end": [
+            -6.0,
+            3.5
+          ],
+          "thickness": 0.3,
+          "height": 2.8,
+          "isExterior": true
+        },
+        {
+          "id": "bw2",
+          "start": [
+            -6.0,
+            3.5
+          ],
+          "end": [
+            -6.0,
+            11.5
+          ],
+          "thickness": 0.3,
+          "height": 2.8,
+          "isExterior": true
+        },
+        {
+          "id": "bw3",
+          "start": [
+            -6.0,
+            11.5
+          ],
+          "end": [
+            -12.0,
+            11.5
+          ],
+          "thickness": 0.3,
+          "height": 2.8,
+          "isExterior": true
+        },
+        {
+          "id": "bw4",
+          "start": [
+            -12.0,
+            11.5
+          ],
+          "end": [
+            -12.0,
+            3.5
+          ],
+          "thickness": 0.3,
+          "height": 2.8,
+          "isExterior": true
+        }
+      ],
+      "openings": [
+        {
+          "id": "bd_1",
+          "wallId": "bw1",
+          "type": "door",
+          "positionFromStart": 2.0,
+          "width": 0.9,
+          "height": 2.1,
+          "sillHeight": 0.0,
+          "label": "Вход в баню"
+        }
+      ],
+      "columns": [
+        {
+          "id": "bcol_1",
+          "position": [
+            -12.0,
+            3.5
+          ],
+          "height": 2.8,
+          "width": 0.2,
+          "depth": 0.2,
+          "material": "dark_wood"
+        },
+        {
+          "id": "bcol_2",
+          "position": [
+            -6.0,
+            3.5
+          ],
+          "height": 2.8,
+          "width": 0.2,
+          "depth": 0.2,
+          "material": "dark_wood"
+        }
+      ],
+      "roof": {
+        "type": "gable",
+        "ridgeAxis": "Y",
+        "slopeDeg": 22.0,
+        "overhang": 0.4,
+        "material": "charcoal_tile"
+      },
+      "rooms": [
+        {
+          "id": "bath_room",
+          "name": "Парная и отдых",
+          "type": "bathroom",
+          "polygon": [
+            [
+              -12.0,
+              3.5
+            ],
+            [
+              -6.0,
+              3.5
+            ],
+            [
+              -6.0,
+              11.5
+            ],
+            [
+              -12.0,
+              11.5
+            ]
+          ],
+          "areaSqM": 48.0,
+          "floorMaterial": "parquet"
+        }
+      ]
+    }
+  ],
+  "siteElements": [
+    {
+      "id": "lawn",
+      "type": "ground",
+      "polygon": [
+        [
+          -16.0,
+          -18.0
+        ],
+        [
+          16.0,
+          -18.0
+        ],
+        [
+          16.0,
+          18.0
+        ],
+        [
+          -16.0,
+          18.0
+        ]
+      ],
+      "material": "grass_lawn"
+    },
+    {
+      "id": "pool",
+      "type": "water",
+      "polygon": [
+        [
+          -11.0,
+          -7.0
+        ],
+        [
+          -5.0,
+          -7.0
+        ],
+        [
+          -5.0,
+          -2.0
+        ],
+        [
+          -11.0,
+          -2.0
+        ]
+      ],
+      "material": "pool_water"
+    },
+    {
+      "id": "parking",
+      "type": "pavers",
+      "polygon": [
+        [
+          -1.0,
+          -14.0
+        ],
+        [
+          7.0,
+          -14.0
+        ],
+        [
+          7.0,
+          -6.0
+        ],
+        [
+          -1.0,
+          -6.0
+        ]
+      ],
+      "material": "asphalt_paver"
+    }
+  ]
+}

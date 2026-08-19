@@ -1,0 +1,157 @@
+{
+  "project": {
+    "name": "Модульная полевая станция",
+    "totalAreaSqM": 12.0,
+    "buildingCount": 1
+  },
+  "buildings": [
+    {
+      "id": "utility_station",
+      "name": "Технический павильон",
+      "type": "utility",
+      "facadeMaterial": "metal_sheet",
+      "wallHeight": 2.2,
+      "walls": [
+        {
+          "id": "w1",
+          "start": [
+            -2.0,
+            -1.5
+          ],
+          "end": [
+            2.0,
+            -1.5
+          ],
+          "thickness": 0.2,
+          "height": 2.2,
+          "isExterior": true
+        },
+        {
+          "id": "w2",
+          "start": [
+            2.0,
+            -1.5
+          ],
+          "end": [
+            2.0,
+            1.5
+          ],
+          "thickness": 0.2,
+          "height": 2.2,
+          "isExterior": true
+        },
+        {
+          "id": "w3",
+          "start": [
+            2.0,
+            1.5
+          ],
+          "end": [
+            -2.0,
+            1.5
+          ],
+          "thickness": 0.2,
+          "height": 2.2,
+          "isExterior": true
+        },
+        {
+          "id": "w4",
+          "start": [
+            -2.0,
+            1.5
+          ],
+          "end": [
+            -2.0,
+            -1.5
+          ],
+          "thickness": 0.2,
+          "height": 2.2,
+          "isExterior": true
+        }
+      ],
+      "openings": [
+        {
+          "id": "door_main",
+          "wallId": "w1",
+          "type": "door",
+          "positionFromStart": 1.4,
+          "width": 1.2,
+          "height": 2.0,
+          "sillHeight": 0.0,
+          "label": "Технологический ворота/въезд"
+        },
+        {
+          "id": "win_vent",
+          "wallId": "w2",
+          "type": "window",
+          "positionFromStart": 1.0,
+          "width": 0.8,
+          "height": 0.6,
+          "sillHeight": 1.4,
+          "label": "Вентиляционный люк"
+        }
+      ],
+      "columns": [],
+      "roof": {
+        "type": "flat",
+        "ridgeAxis": "X",
+        "slopeDeg": 5.0,
+        "overhang": 0.3,
+        "material": "metal_sheet",
+        "fasciaHeight": 0.15
+      },
+      "rooms": [
+        {
+          "id": "room_tech",
+          "name": "Технический блок",
+          "type": "utility",
+          "polygon": [
+            [
+              -2.0,
+              -1.5
+            ],
+            [
+              2.0,
+              -1.5
+            ],
+            [
+              2.0,
+              1.5
+            ],
+            [
+              -2.0,
+              1.5
+            ]
+          ],
+          "areaSqM": 12.0,
+          "floorMaterial": "ceramic_tile"
+        }
+      ]
+    }
+  ],
+  "siteElements": [
+    {
+      "id": "lawn",
+      "type": "ground",
+      "polygon": [
+        [
+          -10.0,
+          -10.0
+        ],
+        [
+          10.0,
+          -10.0
+        ],
+        [
+          10.0,
+          10.0
+        ],
+        [
+          -10.0,
+          10.0
+        ]
+      ],
+      "material": "grass_lawn"
+    }
+  ]
+}

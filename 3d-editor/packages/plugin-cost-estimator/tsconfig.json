@@ -1,0 +1,12 @@
+{
+  "extends": "@pascal/typescript-config/base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["DOM", "ES2022"],
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx"]
+}
