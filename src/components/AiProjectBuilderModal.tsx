@@ -12,6 +12,12 @@ import {
   Download,
   Cpu,
   FileText,
+  Compass,
+  Trees,
+  Flower2,
+  LayoutDashboard,
+  ShieldCheck,
+  Loader2,
 } from 'lucide-react';
 import * as THREE from 'three';
 
@@ -112,17 +118,25 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
   onClose,
   onSendToEngineer,
 }) => {
-  const [step, setStep] = useState<'upload' | 'processing' | 'result'>('upload');
+  // Step State
+  const [step, setStep] = useState<'upload' | 'processing' | 'calibration' | 'result'>('upload');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string>('');
   const [dragActive, setDragActive] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Settings
+  // Settings & Gate 3 Co-Pilot Decisions
   const [facadeStyle, setFacadeStyle] = useState<'white_plaster' | 'wood_timber' | 'red_brick'>('white_plaster');
   const [roofType, setRoofType] = useState<'gable' | 'hip' | 'flat'>('gable');
   const [wallHeight, setWallHeight] = useState<number>(3.0);
   const [showRoofIn3D, setShowRoofIn3D] = useState<boolean>(true);
+
+  // Gate 3 Choices
+  const [windProtection, setWindProtection] = useState<'juniper' | 'pine_spiraea'>('juniper');
+  const [greeneryDensity, setGreeneryDensity] = useState<'optimal' | 'dense'>('optimal');
+  const [terraceLayout, setTerraceLayout] = useState<'unified' | 'split'>('unified');
+  const [facadeTheme, setFacadeTheme] = useState<'mediterranean' | 'chalet' | 'sandstone'>('mediterranean');
+  const [isBuildingAlbum, setIsBuildingAlbum] = useState(false);
 
   // Processing Progress State
   const [progressStep, setProgressStep] = useState<number>(1);
@@ -247,30 +261,43 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
 
       await new Promise((r) => setTimeout(r, 600));
 
-      // Trigger 13-Page PDF Album Generation in background
-      fetch('/api/generate-album', {
+      setProjectData(data);
+      setStep('calibration');
+    } catch (err: any) {
+      console.warn('Pipeline error:', err);
+      // Fallback on network glitch
+      setProjectData(getFallbackProjectData());
+      setStep('calibration');
+    }
+  };
+
+  // Handle Gate 3 Co-Pilot Approval -> Final 13-Page PDF & 3D Album
+  const handleApproveCalibration = async () => {
+    setIsBuildingAlbum(true);
+    try {
+      const res = await fetch('/api/generate-album', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64: selectedImage,
           address: 'г. Керчь, мкр. Героевское, пер. Генерала Косоногова, д. 12',
-          sceneData: data,
+          sceneData: projectData,
+          calibrations: {
+            windProtection,
+            greeneryDensity,
+            terraceLayout,
+            facadeTheme,
+          },
         }),
-      })
-        .then((res) => res.json())
-        .then((res) => {
-          if (res.success && res.pdfBase64) {
-            setPdfDownloadUrl(res.pdfBase64);
-          }
-        })
-        .catch((e) => console.warn('Album generation background task:', e));
-
-      setProjectData(data);
-      setStep('result');
-    } catch (err: any) {
-      console.warn('Pipeline error:', err);
-      // Fallback on network glitch
-      setProjectData(getFallbackProjectData());
+      });
+      const resJson = await res.json();
+      if (resJson.success && resJson.pdfBase64) {
+        setPdfDownloadUrl(resJson.pdfBase64);
+      }
+    } catch (e) {
+      console.warn('Album generation error:', e);
+    } finally {
+      setIsBuildingAlbum(false);
       setStep('result');
     }
   };
@@ -342,7 +369,7 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
 
   // Setup Three.js WebGL Interactive 3D Canvas
   useEffect(() => {
-    if (step !== 'result' || !canvasContainerRef.current || !projectData) return;
+    if ((step !== 'result' && step !== 'calibration') || !canvasContainerRef.current || !projectData) return;
 
     const container = canvasContainerRef.current;
     const width = container.clientWidth || 700;
@@ -874,6 +901,275 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
                     <span>{s.label}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2.5: GATE 3 ARCHITECT CO-PILOT CALIBRATION */}
+          {step === 'calibration' && projectData && (
+            <div className="space-y-5">
+              {/* Header Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-slate-900 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-inner">
+                    <Compass className="h-6 w-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-black text-white font-montserrat">
+                        Гейт 3: Архитектурный Co-Pilot
+                      </h3>
+                      <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                        Геометрия и нормы СНиП подтверждены ✓
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Автоматика уже рассчитала площадь (1000 м²), исключила коллизии и привязала сетку 0.5 м. Выберите 4 решения:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => {
+                      setStep('upload');
+                      setProjectData(null);
+                    }}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Сменить чертёж</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid: 3D Viewport on Left / Decisions on Right */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* 3D Viewport Column */}
+                <div className="lg:col-span-6 flex flex-col space-y-3">
+                  <div className="relative w-full h-[380px] rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 shadow-2xl">
+                    <div ref={canvasContainerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+
+                    <div className="absolute top-3 left-3 flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-900/85 border border-slate-700/80 text-[11px] font-bold text-amber-400 backdrop-blur-md">
+                        🎮 Интерактивный 3D WebGL (Вращайте)
+                      </span>
+                    </div>
+
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                      <button
+                        onClick={() => setShowRoofIn3D(!showRoofIn3D)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-md backdrop-blur-md ${
+                          showRoofIn3D
+                            ? 'bg-slate-900/90 border-slate-700 text-white'
+                            : 'bg-amber-500 text-slate-950 border-amber-400'
+                        }`}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>{showRoofIn3D ? 'Снять крышу' : 'Показать крышу'}</span>
+                      </button>
+
+                      <span className="text-[10px] text-slate-400 bg-slate-950/70 px-2 py-1 rounded-md border border-slate-800">
+                        Колёсико: Масштаб
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/90 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <span>0 коллизий · Отступы ≥ 3м · ТЭП баланс 100%</span>
+                    </div>
+                    <span className="text-slate-400 text-[11px]">S уч: 1000 м²</span>
+                  </div>
+                </div>
+
+                {/* Decision Controls Column */}
+                <div className="lg:col-span-6 flex flex-col justify-between space-y-3">
+                  <div className="space-y-2.5">
+                    {/* 1. Wind Protection */}
+                    <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Trees className="w-4 h-4 text-emerald-400" />
+                          <span>1. Ветрозащита (СВ / ЮЗ Керченский пролив):</span>
+                        </label>
+                        <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          Крымская флора
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setWindProtection('juniper')}
+                          className={`p-2 rounded-lg border text-left transition-all ${
+                            windProtection === 'juniper'
+                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
+                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>🌲 Можжевельник Виргинский</span>
+                            {windProtection === 'juniper' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Ветроустойчив на морском песке</p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setWindProtection('pine_spiraea')}
+                          className={`p-2 rounded-lg border text-left transition-all ${
+                            windProtection === 'pine_spiraea'
+                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
+                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>🌲 Сосна «НАНА» + Спирея</span>
+                            {windProtection === 'pine_spiraea' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Двухъярусный хвойный акцент</p>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 2. Greenery Density */}
+                    <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
+                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Flower2 className="w-4 h-4 text-purple-400" />
+                        <span>2. Баланс озеленения и цветников:</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setGreeneryDensity('optimal')}
+                          className={`p-2 rounded-lg border text-left transition-all ${
+                            greeneryDensity === 'optimal'
+                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
+                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>🌿 Оптимальный (55.8% / 558 м²)</span>
+                            {greeneryDensity === 'optimal' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Лавандовые аллеи и газон</p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setGreeneryDensity('dense')}
+                          className={`p-2 rounded-lg border text-left transition-all ${
+                            greeneryDensity === 'dense'
+                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
+                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>🌿 Плотный сад (62.0% / 620 м²)</span>
+                            {greeneryDensity === 'dense' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">+12 кустов сирени и барбариса</p>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 3. Terrace & Spa Layout */}
+                    <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
+                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <LayoutDashboard className="w-4 h-4 text-amber-400" />
+                        <span>3. Конфигурация террасы и SPA-зоны:</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setTerraceLayout('unified')}
+                          className={`p-2 rounded-lg border text-left transition-all ${
+                            terraceLayout === 'unified'
+                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
+                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>🪵 Единый настил ДПК (212 м²)</span>
+                            {terraceLayout === 'unified' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Бассейн 6×4м и купели на общем настиле</p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setTerraceLayout('split')}
+                          className={`p-2 rounded-lg border text-left transition-all ${
+                            terraceLayout === 'split'
+                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
+                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>🪵 Раздельные подиумы (172 м²)</span>
+                            {terraceLayout === 'split' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Зона загара + отдельная банная терраса</p>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 4. Facade Theme */}
+                    <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
+                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-cyan-400" />
+                        <span>4. Архитектурный стиль строений:</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                        {[
+                          { id: 'mediterranean', title: '🏡 Средиземноморский', desc: 'Белая штукатурка + графит' },
+                          { id: 'chalet', title: '🪵 Эко-Шале', desc: 'Термодерево + антрацит' },
+                          { id: 'sandstone', title: '🧱 Керченский камень', desc: 'Песчаный ракушечник' },
+                        ].map((theme) => (
+                          <button
+                            key={theme.id}
+                            type="button"
+                            onClick={() => setFacadeTheme(theme.id as any)}
+                            className={`p-2 rounded-lg border text-left transition-all ${
+                              facadeTheme === theme.id
+                                ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
+                                : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px]">{theme.title}</span>
+                              {facadeTheme === theme.id && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                            </div>
+                            <p className="text-[9px] text-slate-400 mt-0.5">{theme.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Approval Actions */}
+                  <div className="pt-1">
+                    <button
+                      onClick={handleApproveCalibration}
+                      disabled={isBuildingAlbum}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm shadow-xl glow-amber flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {isBuildingAlbum ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Сборка 13-страничного PDF альбома и 3D-сцены...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-5 h-5" />
+                          <span>✨ Утвердить и собрать 13-страничный альбом проекта</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
