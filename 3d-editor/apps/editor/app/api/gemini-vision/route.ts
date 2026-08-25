@@ -3,59 +3,104 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const GEMINI_SYSTEM_PROMPT = `You are an expert Architectural BIM Engineer and Landscape Master Plan Vectorization AI.
-Your task is to analyze the provided 2D architectural drawing, master plan, or site layout and convert EVERY building, structure, pool, terrace, and landscape zone into a precise, mathematically consistent 3D coordinate model.
+Your task is to analyze the provided 2D architectural drawing, master plan, or site layout and convert EVERY building, structure, carport, shed, pool, terrace, and landscape zone into a precise 3D coordinate model with DYNAMIC per-project Co-Pilot decisions.
 
 CRITICAL VECTORIZATION INSTRUCTIONS:
 1. DETECT ALL BUILDINGS AND STRUCTURES:
-   - Identify EVERY separate building on the plan: Main house, Guest cottage, Glamping domes, Banya/SPA complex, BBQ gazebo, Carport/Parking, Sheds.
-   - For each building, output its 4 exterior walls (and interior room partitions if visible).
-   - For Domes / Round structures: output an 8-sided or 12-sided polygonal wall loop with roof type "dome".
-   - For BBQ Gazebos: output 4 corner posts/walls with roof type "hip" or "gable".
+   - Identify EVERY separate building on the plan:
+     * L-Shaped or rectangular Main House / Villa (extract exterior walls + all visible interior rooms, bathrooms, bedrooms, living, kitchen).
+     * Carport (e.g. 6x6m open posts + roof).
+     * Utility Shed / Workshop (e.g. 3x5m).
+     * BBQ Gazebo / Pergola (e.g. 5x5m).
+     * Domes / Round structures / Banya / Sauna.
+   - For each building, output its exterior walls loop and interior partitions.
 2. DETECT ALL SITE ELEMENTS & ZONING:
-   - Swimming Pool: type "pool", material "pool_water", exact 4-corner polygon (e.g. 6x4m).
-   - Hot tubs: type "hot_tub", material "pool_water".
-   - Wooden DPK Decking & Terraces: type "decking", material "wood_timber", exact polygon.
-   - Walkways & Paths: type "pathway", material "asphalt_paver" or "ceramic_tile".
-   - Parking Area: type "parking", material "asphalt_paver".
+   - Driveway & Parking: type "parking" or "pavers" (e.g. брусчатка).
+   - Walkways & Paths: type "pathway", material "asphalt_paver" or "gravel".
+   - Terraces & Decks: type "decking", material "wood_timber".
+   - Fire Pit (Зона костра): type "fire_pit", material "stone".
+   - Swimming Pool: type "pool", material "pool_water".
    - Lawn & Greenery: type "ground", material "grass_lawn".
-3. METRIC COORDINATE SPACE:
-   - Center the site around [0, 0] in meters (e.g. coordinates from -16m to +16m for a 32m site).
-   - Maintain relative spatial layout and real dimensions indicated on the plan.
+3. EXTRACT SITE METRICS:
+   - If boundary dimensions are indicated (e.g. 25m x 32m = 800 sq.m), set siteDimensions [25, 32] and siteAreaSqM 800.
+   - Extract street name / address (e.g. "ул. Черноморская") if visible.
+4. GENERATE 4 DYNAMIC CO-PILOT DECISIONS TAILORED TO THIS SPECIFIC SITE:
+   - Dynamically create 3-4 decision cards specifically asking questions about the actual objects present on THIS drawing:
+     * e.g., if Carport is present: ask about carport canopy material (smoky monolithic polycarbonate vs seam metal).
+     * e.g., if Fire Pit / BBQ is present: ask about fire pit masonry (fireclay шамот vs basalt natural stone).
+     * e.g., if Hedges (Tuya, Barberry, Dogwood) are marked: ask about hedge composition (Thuja Smaragd vs Dogwood/Barberry mixed border).
+     * e.g., if Pavers/Driveway is marked: ask about paving type (Granite cobbles vs Vibropressed "Old Town").
+     * e.g., if Pool is present: ask about pool surround decking vs coping stone.
 
 OUTPUT MUST BE STRICT VALID JSON ONLY (no markdown outside json).
 JSON Schema:
 {
   "project": {
-    "name": "Project Title",
-    "totalAreaSqM": 1000.0,
-    "buildingCount": 5
+    "name": "L-SHAPED VILLA 140 sq.m",
+    "siteAreaSqM": 800.0,
+    "siteDimensions": [25.0, 32.0],
+    "buildingAreaSqM": 140.0,
+    "address": "г. Керчь, ул. Черноморская",
+    "buildingCount": 3
   },
+  "coPilotDecisions": [
+    {
+      "id": "carport_roof",
+      "categoryRu": "Автонавес 6×6 м",
+      "question": "Материал кровли навеса для 2 автомобилей:",
+      "options": [
+        { "id": "polycarb", "title": "🛡️ Монолитный поликарбонат (дымчатый)", "desc": "Максимум рассеянного света без нагрева авто", "isRecommended": true },
+        { "id": "metal_seam", "title": "🏠 Фальцевая кровля в цвет дома", "desc": "Единый строгий архитектурный ансамбль" }
+      ]
+    },
+    {
+      "id": "firepit_masonry",
+      "categoryRu": "Зона костра и BBQ",
+      "question": "Облицовка костровой чаши и BBQ-террасы:",
+      "options": [
+        { "id": "basalt", "title": "🔥 Природный базальт и огнеупорный кирпич", "desc": "Долговечная теплоемкая кладка", "isRecommended": true },
+        { "id": "corten", "title": "✨ Кортеновская сталь (Loft / Rust)", "desc": "Современный дизайнерский акцент" }
+      ]
+    },
+    {
+      "id": "hedge_plants",
+      "categoryRu": "Живая изгородь вдоль ул. Черноморская",
+      "question": "Состав ветрозащитной живой изгороди:",
+      "options": [
+        { "id": "tuya_smaragd", "title": "🌲 Туя Смарагд (вечнозеленая стена)", "desc": "Плотная круглогодичная защита от пыли и шума", "isRecommended": true },
+        { "id": "derien_barberry", "title": "🌿 Дёрен белый + Барбарис Тунберга", "desc": "Яркая ярусная кулиса с сезонной сменой окраски" }
+      ]
+    },
+    {
+      "id": "paving_driveway",
+      "categoryRu": "Мощение въездной зоны",
+      "question": "Тип брусчатки для парковки и дорожек:",
+      "options": [
+        { "id": "old_town", "title": "🧱 Брусчатка «Старый город» (графит/серый)", "desc": "Классическая вибропрессованная плитка 60мм", "isRecommended": true },
+        { "id": "granite_cut", "title": "🪨 Колотый гранит", "desc": "Максимальная прочность и вековая стойкость" }
+      ]
+    }
+  ],
   "buildings": [
     {
-      "id": "main_house",
-      "name": "Основной Дом",
+      "id": "main_villa",
+      "name": "Вилла 140 м²",
       "type": "residential",
       "facadeMaterial": "white_plaster",
       "wallHeight": 3.0,
-      "walls": [
-        { "id": "w1", "start": [0.0, -2.0], "end": [6.0, -2.0], "thickness": 0.35, "height": 3.0, "isExterior": true },
-        { "id": "w2", "start": [6.0, -2.0], "end": [6.0, 4.0], "thickness": 0.35, "height": 3.0, "isExterior": true },
-        { "id": "w3", "start": [6.0, 4.0], "end": [0.0, 4.0], "thickness": 0.35, "height": 3.0, "isExterior": true },
-        { "id": "w4", "start": [0.0, 4.0], "end": [0.0, -2.0], "thickness": 0.35, "height": 3.0, "isExterior": true }
-      ],
-      "openings": [
-        { "id": "d1", "wallId": "w1", "type": "door", "positionFromStart": 2.5, "width": 1.0, "height": 2.1, "sillHeight": 0.0, "label": "Вход" }
-      ],
-      "roof": { "type": "gable", "slopeDeg": 25.0, "overhang": 0.5, "material": "charcoal_tile" },
+      "walls": [ ... ],
+      "openings": [ ... ],
+      "roof": { "type": "flat", "slopeDeg": 5.0, "material": "charcoal_tile" },
       "rooms": [
-        { "id": "r1", "name": "Кухня-Гостиная", "type": "living", "polygon": [[0.0, -2.0], [6.0, -2.0], [6.0, 4.0], [0.0, 4.0]], "areaSqM": 36.0, "floorMaterial": "parquet" }
+        { "id": "r1", "name": "Кухня-Гостиная", "type": "living", "polygon": [ ... ], "areaSqM": 45.0 }
       ]
     }
   ],
   "siteElements": [
-    { "id": "pool", "type": "pool", "polygon": [[-10.0, 2.0], [-4.0, 2.0], [-4.0, 8.0], [-10.0, 8.0]], "material": "pool_water" },
-    { "id": "decking", "type": "decking", "polygon": [[-12.0, 0.0], [-2.0, 0.0], [-2.0, 10.0], [-12.0, 10.0]], "material": "wood_timber" },
-    { "id": "lawn", "type": "ground", "polygon": [[-16.0, -16.0], [16.0, -16.0], [16.0, 16.0], [-16.0, 16.0]], "material": "grass_lawn" }
+    { "id": "carport", "type": "gazebo", "polygon": [ ... ], "material": "wood_timber" },
+    { "id": "shed", "type": "residential", "polygon": [ ... ], "material": "white_plaster" },
+    { "id": "parking", "type": "parking", "polygon": [ ... ], "material": "asphalt_paver" },
+    { "id": "lawn", "type": "ground", "polygon": [ ... ], "material": "grass_lawn" }
   ]
 }
 `

@@ -13,9 +13,6 @@ import {
   Cpu,
   FileText,
   Compass,
-  Trees,
-  Flower2,
-  LayoutDashboard,
   ShieldCheck,
   Loader2,
 } from 'lucide-react';
@@ -74,12 +71,31 @@ interface VectorizedBuilding {
   }>;
 }
 
+interface CoPilotDecisionOption {
+  id: string;
+  title: string;
+  desc: string;
+  isRecommended?: boolean;
+}
+
+interface CoPilotDecision {
+  id: string;
+  categoryRu: string;
+  question: string;
+  options: CoPilotDecisionOption[];
+}
+
 interface VectorizedProjectData {
   project: {
     name: string;
     totalAreaSqM: number;
+    siteAreaSqM?: number;
+    siteDimensions?: [number, number];
+    buildingAreaSqM?: number;
+    address?: string;
     buildingCount?: number;
   };
+  coPilotDecisions?: CoPilotDecision[];
   buildings: VectorizedBuilding[];
   siteElements?: Array<{
     id: string;
@@ -113,6 +129,108 @@ const PRESET_BLUEPRINTS = [
   },
 ];
 
+const getDefaultCoPilotDecisions = (data: VectorizedProjectData | null): CoPilotDecision[] => {
+  if (!data) return [];
+  const bldgTexts = data.buildings.map((b) => `${b.name} ${b.type || ''}`).join(' ').toLowerCase();
+  const elemTexts = (data.siteElements || []).map((e) => `${e.type} ${e.id}`).join(' ').toLowerCase();
+  const allText = `${bldgTexts} ${elemTexts} ${(data.project.name || '')}`.toLowerCase();
+
+  const decisions: CoPilotDecision[] = [];
+
+  // 1. Carport or Wind Protection
+  if (allText.includes('carport') || allText.includes('навес') || allText.includes('авто') || allText.includes('parking')) {
+    decisions.push({
+      id: 'carport_roof',
+      categoryRu: 'Автонавес для 2 авто',
+      question: '1. Материал кровли навеса для автомобилей:',
+      options: [
+        { id: 'polycarb', title: '🛡️ Монолитный поликарбонат (дымчатый)', desc: 'Максимум рассеянного света без нагрева авто', isRecommended: true },
+        { id: 'metal_seam', title: '🏠 Фальцевая кровля в цвет дома', desc: 'Единый строгий архитектурный ансамбль с виллой' },
+      ],
+    });
+  } else {
+    decisions.push({
+      id: 'wind_protection',
+      categoryRu: 'Ветрозащита (Керченский пролив)',
+      question: '1. Ветрозащитная полоса (СВ / ЮЗ ветры):',
+      options: [
+        { id: 'juniper', title: '🌲 Можжевельник Виргинский', desc: 'Ветроустойчив на морском песчаном грунте', isRecommended: true },
+        { id: 'pine_spiraea', title: '🌲 Сосна «НАНА» + Спирея', desc: 'Двухъярусный хвойно-декоративный акцент' },
+      ],
+    });
+  }
+
+  // 2. Fire Pit / BBQ or Greenery Balance
+  if (allText.includes('костр') || allText.includes('fire_pit') || allText.includes('bbq') || allText.includes('summer')) {
+    decisions.push({
+      id: 'firepit_masonry',
+      categoryRu: 'Зона костра и BBQ-терраса',
+      question: '2. Облицовка костровой чаши и летней террасы:',
+      options: [
+        { id: 'basalt', title: '🔥 Природный базальт и шамотный кирпич', desc: 'Долговечная теплоемкая кладка', isRecommended: true },
+        { id: 'corten', title: '✨ Кортеновская сталь (Loft / Rust)', desc: 'Дизайнерский современный акцент' },
+      ],
+    });
+  } else {
+    decisions.push({
+      id: 'greenery_balance',
+      categoryRu: 'Баланс озеленения и цветников',
+      question: '2. Баланс озеленения и газона:',
+      options: [
+        { id: 'optimal', title: '🌿 Оптимальный (55.8% площади)', desc: 'Лавандовые аллеи, котовник и газон', isRecommended: true },
+        { id: 'dense', title: '🌿 Плотный сад (62.0% площади)', desc: '+12 кустов сирени и барбариса' },
+      ],
+    });
+  }
+
+  // 3. Workshop, Shed, Spa or Terrace
+  if (allText.includes('workshop') || allText.includes('shed') || allText.includes('мастерск') || allText.includes('хозблок')) {
+    decisions.push({
+      id: 'workshop_facade',
+      categoryRu: 'Мастерская и хозблок (3×5 м)',
+      question: '3. Отделка фасадов мастерской:',
+      options: [
+        { id: 'louver_wood', title: '🪵 Штукатурка с деревянными ламелями', desc: 'Скрытый эстетичный фасад в едином стиле', isRecommended: true },
+        { id: 'clinker', title: '🧱 Клинкерная плитка (антрацит)', desc: 'Повышенная износостойкость и защита' },
+      ],
+    });
+  } else if (allText.includes('pool') || allText.includes('бассейн')) {
+    decisions.push({
+      id: 'pool_terrace',
+      categoryRu: 'Бассейн и терраса из ДПК',
+      question: '3. Конфигурация террасы и SPA-зоны:',
+      options: [
+        { id: 'unified', title: '🪵 Единый настил ДПК (212 м²)', desc: 'Бассейн 6×4м и купели на общем настиле', isRecommended: true },
+        { id: 'split', title: '🪵 Раздельные подиумы (172 м²)', desc: 'Зона загара + отдельная банная терраса' },
+      ],
+    });
+  } else {
+    decisions.push({
+      id: 'driveway_paving',
+      categoryRu: 'Мощение въезда и дорожек',
+      question: '3. Тип брусчатки для въезда и дорожек:',
+      options: [
+        { id: 'old_town', title: '🧱 Брусчатка «Старый город» (графит)', desc: 'Классическая вибропрессованная плитка 60мм', isRecommended: true },
+        { id: 'granite', title: '🪨 Колотый гранитный камень', desc: 'Максимальная прочность и вековая стойкость' },
+      ],
+    });
+  }
+
+  // 4. Architectural Style
+  decisions.push({
+    id: 'facade_style',
+    categoryRu: 'Архитектурный стиль строений',
+    question: '4. Архитектурный стиль строений:',
+    options: [
+      { id: 'mediterranean', title: '🏡 Средиземноморский', desc: 'Белая штукатурка + графит', isRecommended: true },
+      { id: 'chalet', title: '🪵 Эко-Шале', desc: 'Термодерево + антрацит' },
+      { id: 'sandstone', title: '🧱 Керченский камень', desc: 'Песчаный ракушечник' },
+    ],
+  });
+
+  return decisions;
+};
+
 export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
   isOpen,
   onClose,
@@ -131,10 +249,8 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
   const [wallHeight, setWallHeight] = useState<number>(3.0);
   const [showRoofIn3D, setShowRoofIn3D] = useState<boolean>(true);
 
-  // Gate 3 Choices
-  const [windProtection, setWindProtection] = useState<'juniper' | 'pine_spiraea'>('juniper');
-  const [greeneryDensity, setGreeneryDensity] = useState<'optimal' | 'dense'>('optimal');
-  const [terraceLayout, setTerraceLayout] = useState<'unified' | 'split'>('unified');
+  // Gate 3 Dynamic Choices Map
+  const [userDecisions, setUserDecisions] = useState<Record<string, string>>({});
   const [facadeTheme, setFacadeTheme] = useState<'mediterranean' | 'chalet' | 'sandstone'>('mediterranean');
   const [isBuildingAlbum, setIsBuildingAlbum] = useState(false);
 
@@ -283,9 +399,7 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
           address: 'г. Керчь, мкр. Героевское, пер. Генерала Косоногова, д. 12',
           sceneData: projectData,
           calibrations: {
-            windProtection,
-            greeneryDensity,
-            terraceLayout,
+            userDecisions,
             facadeTheme,
           },
         }),
@@ -924,7 +1038,7 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-slate-300 mt-0.5">
-                      Автоматика уже рассчитала площадь (1000 м²), исключила коллизии и привязала сетку 0.5 м. Выберите 4 решения:
+                      Автоматика уже рассчитала площадь ({projectData.project.siteAreaSqM || projectData.project.totalAreaSqM || (projectData.project.siteDimensions ? projectData.project.siteDimensions[0] * projectData.project.siteDimensions[1] : 800)} м²), исключила коллизии и привязала сетку 0.5 м. Выберите 4 решения:
                     </p>
                   </div>
                 </div>
@@ -980,172 +1094,59 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
                       <ShieldCheck className="w-4 h-4 shrink-0" />
                       <span>0 коллизий · Отступы ≥ 3м · ТЭП баланс 100%</span>
                     </div>
-                    <span className="text-slate-400 text-[11px]">S уч: 1000 м²</span>
+                    <span className="text-slate-400 text-[11px]">
+                      S уч: {projectData.project.siteAreaSqM || projectData.project.totalAreaSqM || (projectData.project.siteDimensions ? projectData.project.siteDimensions[0] * projectData.project.siteDimensions[1] : 800)} м²
+                    </span>
                   </div>
                 </div>
 
                 {/* Decision Controls Column */}
                 <div className="lg:col-span-6 flex flex-col justify-between space-y-3">
                   <div className="space-y-2.5">
-                    {/* 1. Wind Protection */}
-                    <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <Trees className="w-4 h-4 text-emerald-400" />
-                          <span>1. Ветрозащита (СВ / ЮЗ Керченский пролив):</span>
-                        </label>
-                        <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                          Крымская флора
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setWindProtection('juniper')}
-                          className={`p-2 rounded-lg border text-left transition-all ${
-                            windProtection === 'juniper'
-                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
-                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
+                    {(projectData.coPilotDecisions && projectData.coPilotDecisions.length > 0
+                      ? projectData.coPilotDecisions
+                      : getDefaultCoPilotDecisions(projectData)
+                    ).map((decision) => {
+                      const currentSelected =
+                        userDecisions[decision.id] ||
+                        decision.options.find((o) => o.isRecommended)?.id ||
+                        decision.options[0].id;
+                      return (
+                        <div key={decision.id} className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span>🌲 Можжевельник Виргинский</span>
-                            {windProtection === 'juniper' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                            <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <span>{decision.question}</span>
+                            </label>
+                            <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                              {decision.categoryRu}
+                            </span>
                           </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Ветроустойчив на морском песке</p>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setWindProtection('pine_spiraea')}
-                          className={`p-2 rounded-lg border text-left transition-all ${
-                            windProtection === 'pine_spiraea'
-                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
-                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>🌲 Сосна «НАНА» + Спирея</span>
-                            {windProtection === 'pine_spiraea' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
+                          <div className={`grid grid-cols-1 sm:grid-cols-${Math.min(3, decision.options.length)} gap-2 text-xs`}>
+                            {decision.options.map((opt) => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => {
+                                  setUserDecisions((prev) => ({ ...prev, [decision.id]: opt.id }));
+                                  if (decision.id === 'facade_style') setFacadeTheme(opt.id as any);
+                                }}
+                                className={`p-2 rounded-lg border text-left transition-all ${
+                                  currentSelected === opt.id
+                                    ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
+                                    : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px]">{opt.title}</span>
+                                  {currentSelected === opt.id && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                                </div>
+                                <p className="text-[9px] text-slate-400 mt-0.5">{opt.desc}</p>
+                              </button>
+                            ))}
                           </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Двухъярусный хвойный акцент</p>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 2. Greenery Density */}
-                    <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
-                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Flower2 className="w-4 h-4 text-purple-400" />
-                        <span>2. Баланс озеленения и цветников:</span>
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setGreeneryDensity('optimal')}
-                          className={`p-2 rounded-lg border text-left transition-all ${
-                            greeneryDensity === 'optimal'
-                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
-                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>🌿 Оптимальный (55.8% / 558 м²)</span>
-                            {greeneryDensity === 'optimal' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Лавандовые аллеи и газон</p>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setGreeneryDensity('dense')}
-                          className={`p-2 rounded-lg border text-left transition-all ${
-                            greeneryDensity === 'dense'
-                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
-                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>🌿 Плотный сад (62.0% / 620 м²)</span>
-                            {greeneryDensity === 'dense' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">+12 кустов сирени и барбариса</p>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 3. Terrace & Spa Layout */}
-                    <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
-                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <LayoutDashboard className="w-4 h-4 text-amber-400" />
-                        <span>3. Конфигурация террасы и SPA-зоны:</span>
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setTerraceLayout('unified')}
-                          className={`p-2 rounded-lg border text-left transition-all ${
-                            terraceLayout === 'unified'
-                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
-                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>🪵 Единый настил ДПК (212 м²)</span>
-                            {terraceLayout === 'unified' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Бассейн 6×4м и купели на общем настиле</p>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setTerraceLayout('split')}
-                          className={`p-2 rounded-lg border text-left transition-all ${
-                            terraceLayout === 'split'
-                              ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
-                              : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>🪵 Раздельные подиумы (172 м²)</span>
-                            {terraceLayout === 'split' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Зона загара + отдельная банная терраса</p>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 4. Facade Theme */}
-                    <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
-                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-cyan-400" />
-                        <span>4. Архитектурный стиль строений:</span>
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                        {[
-                          { id: 'mediterranean', title: '🏡 Средиземноморский', desc: 'Белая штукатурка + графит' },
-                          { id: 'chalet', title: '🪵 Эко-Шале', desc: 'Термодерево + антрацит' },
-                          { id: 'sandstone', title: '🧱 Керченский камень', desc: 'Песчаный ракушечник' },
-                        ].map((theme) => (
-                          <button
-                            key={theme.id}
-                            type="button"
-                            onClick={() => setFacadeTheme(theme.id as any)}
-                            className={`p-2 rounded-lg border text-left transition-all ${
-                              facadeTheme === theme.id
-                                ? 'border-amber-400 bg-amber-500/15 text-white font-bold'
-                                : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px]">{theme.title}</span>
-                              {facadeTheme === theme.id && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />}
-                            </div>
-                            <p className="text-[9px] text-slate-400 mt-0.5">{theme.desc}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Approval Actions */}
