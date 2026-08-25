@@ -11,6 +11,7 @@ import {
   Sliders,
   Download,
   Cpu,
+  FileText,
 } from 'lucide-react';
 import * as THREE from 'three';
 
@@ -129,6 +130,7 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
 
   // Result Data
   const [projectData, setProjectData] = useState<VectorizedProjectData | null>(null);
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
 
   // 3D Canvas Ref
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -244,6 +246,23 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
       setProgressText('🎨 [PBR Shading] Наложение физических материалов, меблировка и расчет строительной сметы...');
 
       await new Promise((r) => setTimeout(r, 600));
+
+      // Trigger 13-Page PDF Album Generation in background
+      fetch('/api/generate-album', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: selectedImage,
+          address: 'г. Керчь, мкр. Героевское, пер. Генерала Косоногова, д. 12',
+        }),
+      })
+        .then((res) => res.json())
+        .then((res) => {
+          if (res.success && res.pdfBase64) {
+            setPdfDownloadUrl(res.pdfBase64);
+          }
+        })
+        .catch((e) => console.warn('Album generation background task:', e));
 
       setProjectData(data);
       setStep('result');
@@ -957,6 +976,21 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
                   >
                     <span>Оформить проект и получить точную смету</span>
                     <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const downloadAnchor = document.createElement('a');
+                      downloadAnchor.setAttribute('href', pdfDownloadUrl || '/output_album_test/Пояснительная_записка_проект.pdf');
+                      downloadAnchor.setAttribute('download', 'Пояснительная_записка_Героевское_12.pdf');
+                      document.body.appendChild(downloadAnchor);
+                      downloadAnchor.click();
+                      downloadAnchor.remove();
+                    }}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>📄 Скачать 13-страничный Альбом проекта (PDF)</span>
                   </button>
 
                   <button

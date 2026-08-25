@@ -20,13 +20,11 @@ out/
 .env.production.local
 *.env
 
-# Python artifacts
-__pycache__/
-*.py[cod]
-*$py.class
-venv/
-.venv/
-env/
+# Large Media & Source PDFs (>100MB)
+*.pdf
+output_album/
+output_album_test/
+Проекты/*.pdf
 
 # Logs
 npm-debug.log*
