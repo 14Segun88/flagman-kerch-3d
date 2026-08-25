@@ -89,21 +89,21 @@ const PRESET_BLUEPRINTS = [
     title: '🏡 Усадьба с баней, бассейном и беседкой',
     badge: 'Генплан',
     desc: 'Комплекс из 4 строений: L-Дом 120м², Баня 48м², Беседка с BBQ, Бассейн 6×4м и Парковка',
-    image: '/assets/cottage.jpg',
+    image: '/assets/master_estate_blueprint.png',
   },
   {
     id: 'modern_house',
     title: '📐 Современный коттедж 10×12 м',
     badge: '1 этаж',
     desc: 'Гостиная-столовая 42м², 2 спальни, мастер-гардеробная, 2 санузла и панорамная терраса',
-    image: '/assets/miniexcavator.jpg',
+    image: '/assets/modern_house.png',
   },
   {
     id: 'nordic_bath',
     title: '🪵 Скандинавская баня с террасой',
     badge: 'Баня / Спа',
     desc: 'Парная из кедра, просторная моечная, комната отдыха с кухней и открытая веранда',
-    image: '/assets/shed.jpg',
+    image: '/assets/nordic_bath.png',
   },
 ];
 
@@ -690,7 +690,14 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
                     <img
                       src={selectedImage}
                       alt="Превью чертежа"
-                      className="max-h-48 rounded-xl object-contain border border-slate-700 shadow-md bg-slate-900"
+                      className="max-h-52 max-w-full rounded-xl object-contain border border-slate-700/80 shadow-xl bg-slate-900"
+                      onError={(e) => {
+                        console.warn('Preview image load error:', selectedImage);
+                        const target = e.target as HTMLImageElement;
+                        if (!target.src.includes('master_estate_blueprint.png')) {
+                          target.src = '/assets/master_estate_blueprint.png';
+                        }
+                      }}
                     />
                     <div className="flex items-center gap-2 text-xs text-emerald-400 font-bold">
                       <CheckCircle2 className="h-4 w-4" />
