@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import fs from 'node:fs'
+import path from 'node:path'
 
 const GEMINI_SYSTEM_PROMPT = `You are an expert Architectural BIM Engineer and 2D-to-3D Floorplan Vectorization AI.
 Your task is to analyze the provided 2D floorplan drawing, sketch, or site master plan and convert it into a precise, mathematically consistent, topological JSON structure for direct 3D modeling.
@@ -46,14 +48,34 @@ JSON Format:
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const imageBase64 = body.imageBase64 || body.image
+    const rawImage = body.imageBase64 || body.image
     const clientApiKey = body.apiKey
 
-    if (!imageBase64) {
+    if (!rawImage) {
       return NextResponse.json({ success: false, error: 'imageBase64 is missing' }, { status: 400 })
     }
 
-    const formattedBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
+    let formattedBase64 = rawImage.replace(/^data:image\/\w+;base64,/, '')
+    let mimeType = 'image/jpeg'
+
+    // Handle local preset URL paths like "/assets/cottage.jpg" or "/assets/master_estate.jpg"
+    if (typeof rawImage === 'string' && (rawImage.startsWith('/') || rawImage.startsWith('http'))) {
+      const rootDir = path.resolve(process.cwd(), '../..')
+      const publicPath = path.join(rootDir, 'public', rawImage.replace(/^\//, ''))
+      const rootAssetPath = path.join(rootDir, rawImage.replace(/^\//, ''))
+      const targetFile = fs.existsSync(publicPath) ? publicPath : fs.existsSync(rootAssetPath) ? rootAssetPath : null
+
+      if (targetFile) {
+        const fileBuffer = fs.readFileSync(targetFile)
+        formattedBase64 = fileBuffer.toString('base64')
+        if (targetFile.endsWith('.png')) mimeType = 'image/png'
+      } else {
+        // Fallback sample 1x1 base64 if sample asset is a placeholder
+        formattedBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        mimeType = 'image/png'
+      }
+    }
+
     const apiKey = clientApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
 
     if (!apiKey) {
@@ -69,6 +91,8 @@ export async function POST(req: Request) {
     const modelName = body.model || 'gemini-3.6-flash'
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
 
+    console.log(`🔮 [Gemini API] Requesting ${modelName} for 2D-to-3D vectorization...`)
+
     const payload = {
       system_instruction: {
         parts: [{ text: GEMINI_SYSTEM_PROMPT }],
@@ -81,7 +105,7 @@ export async function POST(req: Request) {
             },
             {
               inline_data: {
-                mime_type: 'image/jpeg',
+                mime_type: mimeType,
                 data: formattedBase64,
               },
             },
@@ -91,45 +115,37 @@ export async function POST(req: Request) {
       generationConfig: {
         response_mime_type: 'application/json',
         temperature: 0.1,
-        maxOutputTokens: 8192,
       },
     }
 
-    console.log(`🔮 [Gemini API] Requesting ${modelName} for 2D-to-3D vectorization...`)
-
-    const res = await fetch(url, {
+    const geminiRes = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(payload),
     })
 
-    if (!res.ok) {
-      const errText = await res.text()
-      console.error(`❌ [Gemini API Error ${res.status}]:`, errText)
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text()
+      console.error(`❌ [Gemini API Error ${geminiRes.status}]:`, errText)
       return NextResponse.json(
-        { success: false, error: `Google AI Studio Error (${res.status}): ${errText}` },
-        { status: res.status },
+        { success: false, error: `Gemini API returned ${geminiRes.status}: ${errText}` },
+        { status: geminiRes.status },
       )
     }
 
-    const resData = await res.json()
-    const candidates = resData.candidates || []
-    if (candidates.length === 0) {
-      return NextResponse.json({ success: false, error: 'No response candidates from Gemini' }, { status: 500 })
+    const resJson = await geminiRes.json()
+    const rawText = resJson?.candidates?.[0]?.content?.parts?.[0]?.text
+
+    if (!rawText) {
+      return NextResponse.json({ success: false, error: 'Empty response from Gemini Vision' }, { status: 500 })
     }
 
-    const rawText = candidates[0]?.content?.parts?.[0]?.text || '{}'
-    const parsedJson = JSON.parse(rawText)
-
-    console.log('✅ [Gemini API] Successfully vectorized 2D drawing!')
-    return NextResponse.json({
-      success: true,
-      data: parsedJson,
-      source: 'google_ai_studio_gemini',
-      model: modelName,
-    })
+    const parsedData = JSON.parse(rawText)
+    return NextResponse.json({ success: true, data: parsedData, model: modelName })
   } catch (error: any) {
-    console.error('❌ [Gemini API Exception]:', error)
+    console.error('❌ [Gemini Vision Exception]:', error)
     return NextResponse.json({ success: false, error: error.message || 'Internal error' }, { status: 500 })
   }
 }

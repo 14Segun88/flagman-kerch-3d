@@ -50,7 +50,6 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     resolveAlias: {
-      fs: './lib/empty-module.js',
       react: './node_modules/react',
       three: './node_modules/three',
       '@react-three/fiber': './node_modules/@react-three/fiber',

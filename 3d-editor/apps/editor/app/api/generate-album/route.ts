@@ -1,7 +1,20 @@
 import { NextResponse } from 'next/server'
-import { spawn } from 'child_process'
-import path from 'path'
-import fs from 'fs'
+import { spawn } from 'node:child_process'
+import path from 'node:path'
+import fs from 'node:fs'
+
+function findWorkspaceRoot(): string {
+  let curr = process.cwd()
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(curr, 'tooling/landscape_album_pipeline.py'))) {
+      return curr
+    }
+    const parent = path.dirname(curr)
+    if (parent === curr) break
+    curr = parent
+  }
+  return path.resolve(process.cwd(), '../../..')
+}
 
 export async function POST(req: Request) {
   try {
@@ -9,21 +22,30 @@ export async function POST(req: Request) {
     const address = body.address || 'г. Керчь, мкр. Героевское, пер. Генерала Косоногова, д. 12'
     const imageBase64 = body.imageBase64 || body.image
 
-    const outDir = path.resolve(process.cwd(), '../../output_album')
+    const rootDir = findWorkspaceRoot()
+    const outDir = path.join(rootDir, 'output_album_test')
+    
     if (!fs.existsSync(outDir)) {
       fs.mkdirSync(outDir, { recursive: true })
     }
 
     let tempImagePath = ''
-    if (imageBase64) {
-      const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
-      tempImagePath = path.join(outDir, 'input_sketch.jpg')
-      fs.writeFileSync(tempImagePath, Buffer.from(cleanBase64, 'base64'))
+    if (imageBase64 && typeof imageBase64 === 'string') {
+      if (imageBase64.startsWith('/') || imageBase64.startsWith('http')) {
+        const localAsset = path.join(rootDir, 'public', imageBase64.replace(/^\//, ''))
+        if (fs.existsSync(localAsset)) {
+          tempImagePath = localAsset
+        }
+      } else {
+        const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
+        tempImagePath = path.join(outDir, 'input_sketch.jpg')
+        fs.writeFileSync(tempImagePath, Buffer.from(cleanBase64, 'base64'))
+      }
     }
 
-    const scriptPath = path.resolve(process.cwd(), '../../tooling/landscape_album_pipeline.py')
+    const scriptPath = path.join(rootDir, 'tooling/landscape_album_pipeline.py')
 
-    console.log(`🚀 [Album API] Running PDF Album generator for: ${address}`)
+    console.log(`🚀 [Album API] Running PDF Album generator: ${scriptPath} for: ${address}`)
 
     const args = ['--address', address, '--output', outDir]
     if (tempImagePath) {
@@ -31,7 +53,7 @@ export async function POST(req: Request) {
     }
 
     await new Promise((resolve, reject) => {
-      const py = spawn('python3', [scriptPath, ...args])
+      const py = spawn('python3', [scriptPath, ...args], { cwd: rootDir })
       let stdout = ''
       let stderr = ''
 
