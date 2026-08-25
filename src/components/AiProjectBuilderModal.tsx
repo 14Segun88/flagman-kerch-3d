@@ -52,7 +52,7 @@ interface VectorizedBuilding {
     label?: string;
   }>;
   roof?: {
-    type: 'gable' | 'hip' | 'flat' | 'shed';
+    type: 'gable' | 'hip' | 'flat' | 'shed' | 'dome';
     ridgeAxis?: 'X' | 'Y';
     slopeDeg?: number;
     overhang?: number;
@@ -254,6 +254,7 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
         body: JSON.stringify({
           imageBase64: selectedImage,
           address: 'г. Керчь, мкр. Героевское, пер. Генерала Косоногова, д. 12',
+          sceneData: data,
         }),
       })
         .then((res) => res.json())
@@ -471,11 +472,11 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
         rootGroup.add(fMesh);
       }
 
-      // Roof (Parametric Gable)
+      // Roof (Parametric Gable / Dome / Hip)
       if (bldg.roof && bldg.walls.length > 0) {
         const xs = bldg.walls.flatMap((w) => [w.start[0], w.end[0]]);
         const ys = bldg.walls.flatMap((w) => [w.start[1], w.end[1]]);
-        const overhang = bldg.roof.overhang || 0.5;
+        const overhang = bldg.roof.overhang || 0.4;
         const minX = Math.min(...xs) - overhang;
         const maxX = Math.max(...xs) + overhang;
         const minY = Math.min(...ys) - overhang;
@@ -483,31 +484,41 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
 
         const w = maxX - minX;
         const d = maxY - minY;
-        const ridgeH = (Math.min(w, d) / 2) * Math.tan((bldg.roof.slopeDeg || 25) * (Math.PI / 180));
 
-        // Gable geometry
-        const roofGeom = new THREE.BufferGeometry();
-        const midY = (minY + maxY) / 2;
-        const bz = bHeight;
-        const rz = bHeight + ridgeH;
+        if (bldg.roof.type === 'dome' || bldg.type === 'dome') {
+          const domeRadius = Math.max(w, d) / 2;
+          const domeGeom = new THREE.SphereGeometry(domeRadius, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+          const domeMesh = new THREE.Mesh(domeGeom, mats.wood_timber);
+          domeMesh.position.set((minX + maxX) / 2, bHeight, (minY + maxY) / 2);
+          domeMesh.castShadow = true;
+          roofGroup.add(domeMesh);
+        } else {
+          const ridgeH = (Math.min(w, d) / 2) * Math.tan((bldg.roof.slopeDeg || 25) * (Math.PI / 180));
 
-        const verts = new Float32Array([
-          // Pitch 1
-          minX, bz, minY,   maxX, bz, minY,   maxX, rz, midY,
-          minX, bz, minY,   maxX, rz, midY,   minX, rz, midY,
-          // Pitch 2
-          minX, rz, midY,   maxX, rz, midY,   maxX, bz, maxY,
-          minX, rz, midY,   maxX, bz, maxY,   minX, bz, maxY,
-          // Gables
-          minX, bz, minY,   minX, rz, midY,   minX, bz, maxY,
-          maxX, bz, minY,   maxX, bz, maxY,   maxX, rz, midY,
-        ]);
-        roofGeom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-        roofGeom.computeVertexNormals();
+          // Gable geometry
+          const roofGeom = new THREE.BufferGeometry();
+          const midY = (minY + maxY) / 2;
+          const bz = bHeight;
+          const rz = bHeight + ridgeH;
 
-        const roofMesh = new THREE.Mesh(roofGeom, mats.charcoal_tile);
-        roofMesh.castShadow = true;
-        roofGroup.add(roofMesh);
+          const verts = new Float32Array([
+            // Pitch 1
+            minX, bz, minY,   maxX, bz, minY,   maxX, rz, midY,
+            minX, bz, minY,   maxX, rz, midY,   minX, rz, midY,
+            // Pitch 2
+            minX, rz, midY,   maxX, rz, midY,   maxX, bz, maxY,
+            minX, rz, midY,   maxX, bz, maxY,   minX, bz, maxY,
+            // Gables
+            minX, bz, minY,   minX, rz, midY,   minX, bz, maxY,
+            maxX, bz, minY,   maxX, bz, maxY,   maxX, rz, midY,
+          ]);
+          roofGeom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+          roofGeom.computeVertexNormals();
+
+          const roofMesh = new THREE.Mesh(roofGeom, mats.charcoal_tile);
+          roofMesh.castShadow = true;
+          roofGroup.add(roofMesh);
+        }
       }
     }
 

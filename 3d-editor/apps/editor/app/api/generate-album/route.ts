@@ -45,6 +45,13 @@ export async function POST(req: Request) {
       }
     }
 
+    let tempSceneJsonPath = ''
+    const rawSceneData = body.sceneData || body.projectData
+    if (rawSceneData && typeof rawSceneData === 'object') {
+      tempSceneJsonPath = path.join(outDir, 'input_scene.json')
+      fs.writeFileSync(tempSceneJsonPath, JSON.stringify(rawSceneData, null, 2))
+    }
+
     const scriptPath = path.join(rootDir, 'tooling/landscape_album_pipeline.py')
 
     console.log(`🚀 [Album API] Running PDF Album generator: ${scriptPath} for: ${address}`)
@@ -52,6 +59,9 @@ export async function POST(req: Request) {
     const args = ['--address', address, '--output', outDir]
     if (tempImagePath) {
       args.push('--image', tempImagePath)
+    }
+    if (tempSceneJsonPath) {
+      args.push('--scene-json', tempSceneJsonPath)
     }
 
     await new Promise((resolve, reject) => {
