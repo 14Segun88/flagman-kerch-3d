@@ -1,15 +1,17 @@
 """
 13-Page Landscape & Architectural Explanatory Note PDF Album Builder.
-Assembles text sheets and 2D CAD/3D render graphics into a clean, printable PDF.
+Assembles text sheets and 2D CAD/3D render graphics into a clean, printable PDF
+with 100% Cyrillic TrueType font support.
 """
 
 from pathlib import Path
 from typing import Dict, Any, List
 import fitz  # PyMuPDF
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 from .scene_graph import LandscapeSceneGraph
 from .cad_sheet_generator import CadSheetGenerator
+from .font_helper import get_cyrillic_font
 
 
 class AlbumPdfBuilder:
@@ -24,6 +26,14 @@ class AlbumPdfBuilder:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.cad_gen = CadSheetGenerator(scene)
 
+        # Pre-load TrueType Cyrillic fonts
+        self.f_hero = get_cyrillic_font(28, bold=True)
+        self.f_title = get_cyrillic_font(20, bold=True)
+        self.f_h2 = get_cyrillic_font(15, bold=True)
+        self.f_body = get_cyrillic_font(13, bold=False)
+        self.f_small = get_cyrillic_font(10, bold=False)
+        self.f_stamp = get_cyrillic_font(11, bold=True)
+
     def _create_text_sheet_image(self, sheet_num: int, title: str, sections: List[Dict[str, str]]) -> Path:
         """Generates a styled A4 landscape graphic page for narrative text sheets."""
         width_px = 1200
@@ -31,27 +41,26 @@ class AlbumPdfBuilder:
         img = Image.new("RGB", (width_px, height_px), "#ffffff")
         draw = ImageDraw.Draw(img)
 
-        # Border & Title block
+        # Border & Inner Margin
         draw.rectangle([(20, 20), (width_px - 20, height_px - 20)], outline="#334155", width=2)
         draw.rectangle([(30, 30), (width_px - 30, height_px - 30)], outline="#0f172a", width=1)
 
         # Header Title
-        draw.text((60, 50), title, fill="#0f172a")
-        draw.line([(60, 75), (width_px - 60, 75)], fill="#cbd5e1", width=1)
+        draw.text((60, 50), title, fill="#0f172a", font=self.f_title)
+        draw.line([(60, 85), (width_px - 60, 85)], fill="#cbd5e1", width=1)
 
-        y_cursor = 95
+        y_cursor = 105
         for sec in sections:
             if sec.get("heading"):
-                draw.text((60, y_cursor), sec["heading"], fill="#0f172a")
-                y_cursor += 25
+                draw.text((60, y_cursor), sec["heading"], fill="#0f172a", font=self.f_h2)
+                y_cursor += 28
             
             body = sec.get("body", "")
-            # Word wrap simulation
             lines = body.split("\n")
             for l in lines:
-                draw.text((60, y_cursor), l, fill="#334155")
-                y_cursor += 20
-            y_cursor += 15
+                draw.text((60, y_cursor), l, fill="#334155", font=self.f_body)
+                y_cursor += 22
+            y_cursor += 16
 
         # Bottom Stamp
         bx0 = width_px - 380
@@ -59,10 +68,13 @@ class AlbumPdfBuilder:
         bx1 = width_px - 30
         by1 = height_px - 30
         draw.rectangle([(bx0, by0), (bx1, by1)], fill="#f8fafc", outline="#0f172a", width=2)
-        draw.text((bx0 + 10, by0 + 8), self.scene.project_title[:38], fill="#0f172a")
-        draw.text((bx0 + 10, by0 + 38), f"Лист {sheet_num}: {title}", fill="#0f172a")
-        draw.text((bx0 + 10, by0 + 60), f"{self.scene.year} г.", fill="#475569")
-        draw.text((bx0 + 260, by0 + 60), "ФЛАГМАН", fill="#d97706")
+        draw.line([(bx0, by0 + 35), (bx1, by0 + 35)], fill="#0f172a", width=1)
+        draw.line([(bx0, by0 + 55), (bx1, by0 + 55)], fill="#0f172a", width=1)
+
+        draw.text((bx0 + 10, by0 + 8), self.scene.project_title[:38], fill="#0f172a", font=self.f_stamp)
+        draw.text((bx0 + 10, by0 + 38), f"Лист {sheet_num}: {title}", fill="#0f172a", font=self.f_stamp)
+        draw.text((bx0 + 10, by0 + 60), f"{self.scene.year} г.", fill="#475569", font=self.f_small)
+        draw.text((bx0 + 260, by0 + 60), "ФЛАГМАН", fill="#d97706", font=self.f_stamp)
 
         out_path = self.output_dir / f"sheet_{sheet_num:02d}.png"
         img.save(str(out_path), "PNG")
@@ -76,16 +88,16 @@ class AlbumPdfBuilder:
         draw = ImageDraw.Draw(img)
 
         draw.rectangle([(30, 30), (width_px - 30, height_px - 30)], outline="#d97706", width=2)
-        draw.text((80, 80), f"Ландшафтное бюро / {self.scene.author}", fill="#94a3b8")
-        draw.text((80, 105), "тел: +7 (978) 066-23-80 | flagman-kerch.ru", fill="#64748b")
+        draw.text((80, 70), f"Ландшафтное бюро / {self.scene.author}", fill="#94a3b8", font=self.f_h2)
+        draw.text((80, 100), "тел: +7 (978) 066-23-80 | flagman-kerch.ru", fill="#64748b", font=self.f_body)
 
-        draw.text((80, 300), "Э С К И З Н Ы Й   П Р О Е К Т", fill="#d97706")
-        draw.text((80, 340), "Благоустройства и 3D-моделирования территории", fill="#ffffff")
-        draw.text((80, 390), f"Адрес объекта: {self.scene.address}", fill="#cbd5e1")
-        draw.text((80, 420), f"Площадь участка: S = {self.scene.total_site_area_sq_m} м²", fill="#94a3b8")
+        draw.text((80, 270), "Э С К И З Н Ы Й   П Р О Е К Т", fill="#d97706", font=self.f_hero)
+        draw.text((80, 320), "Благоустройства и 3D-моделирования территории", fill="#ffffff", font=self.f_title)
+        draw.text((80, 375), f"Адрес объекта: {self.scene.address}", fill="#cbd5e1", font=self.f_h2)
+        draw.text((80, 410), f"Площадь участка: S = {self.scene.total_site_area_sq_m} м²", fill="#94a3b8", font=self.f_body)
 
-        draw.text((80, height_px - 80), f"г. Керчь, {self.scene.year} г.", fill="#64748b")
-        draw.text((width_px - 220, height_px - 80), "ФЛАГМАН 3D", fill="#d97706")
+        draw.text((80, height_px - 80), f"г. Керчь, {self.scene.year} г.", fill="#64748b", font=self.f_body)
+        draw.text((width_px - 220, height_px - 80), "ФЛАГМАН 3D", fill="#d97706", font=self.f_title)
 
         out_path = self.output_dir / "sheet_01.png"
         img.save(str(out_path), "PNG")
@@ -155,16 +167,15 @@ class AlbumPdfBuilder:
             )}
         ]))
 
-        # Sheets 6-11: CAD Drawings
+        # Sheets 6-11: CAD Drawings with Cyrillic TrueType Fonts
         sheet_files.append(self.cad_gen.generate_sheet_06_situational_plan(self.output_dir / "sheet_06.png"))
         sheet_files.append(self.cad_gen.generate_sheet_07_paving_dts_plan(self.output_dir / "sheet_07.png"))
         sheet_files.append(self.cad_gen.generate_sheet_08_dendro_plan(self.output_dir / "sheet_08.png"))
-        sheet_files.append(self.cad_gen.generate_sheet_08_dendro_plan(self.output_dir / "sheet_09.png"))  # Planting layout
+        sheet_files.append(self.cad_gen.generate_sheet_08_dendro_plan(self.output_dir / "sheet_09.png"))
         sheet_files.append(self.cad_gen.generate_sheet_10_maf_plan(self.output_dir / "sheet_10.png"))
         sheet_files.append(self.cad_gen.generate_sheet_11_master_plan(self.output_dir / "sheet_11.png"))
 
         # Sheets 12-13: 3D Visualizations
-        # If real 3D render exists, use it; otherwise generate styled 3D visual preview sheet
         render_path = self.output_dir / "render_preview.png"
         vis_12 = render_path if render_path.exists() else self._create_text_sheet_image(12, "3D-Визуализация (Общий вид)", [
             {"heading": "Архитектурная 3D-визуализация комплекса", "body": "Рендер генерального плана с высоты птичьего полета (Daylight Scene)."}
@@ -175,7 +186,7 @@ class AlbumPdfBuilder:
         sheet_files.append(vis_12)
         sheet_files.append(vis_13)
 
-        # Assemble into PDF via PyMuPDF (fitz)
+        # Assemble into PDF via PyMuPDF
         pdf_doc = fitz.open()
         for s_path in sheet_files:
             img_doc = fitz.open(str(s_path))
@@ -189,5 +200,5 @@ class AlbumPdfBuilder:
         final_pdf_path = self.output_dir / pdf_filename
         pdf_doc.save(str(final_pdf_path))
         pdf_doc.close()
-        print(f"🎉 [PDF Builder] Successfully assembled 13-sheet PDF Album: {final_pdf_path}")
+        print(f"🎉 [PDF Builder] Successfully assembled 13-sheet PDF Album with Cyrillic fonts: {final_pdf_path}")
         return final_pdf_path
