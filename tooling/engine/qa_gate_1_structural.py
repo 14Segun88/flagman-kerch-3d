@@ -1,6 +1,7 @@
 """
 QA Gate 1: Structural & Regulatory Pre-Check (СП / СНиП & RAG Tag Filter).
 Fails fast before passing into expensive geometry calculation.
+Enforces retry limits (max 3) with human escalation on persistent failure.
 """
 
 from typing import Dict, Any, List, Tuple
@@ -19,6 +20,8 @@ LEGAL_SETBACKS_M: Dict[str, float] = {
     "shrub_to_boundary": 1.0,                 # Кустарники до границы
 }
 
+MAX_GATE_1_RETRIES = 3
+
 
 class QaGate1StructuralValidator:
     """Gate 1: Verifies feasibility, zone capacities, legal norms and plant tags."""
@@ -29,16 +32,28 @@ class QaGate1StructuralValidator:
         requested_buildings: List[Dict[str, Any]],
         requested_zones: List[Dict[str, Any]],
         requested_plants: List[str],
-        soil_type: str = "sand"
+        soil_type: str = "sand",
+        current_retry_count: int = 0
     ) -> Tuple[bool, List[str], Dict[str, Any]]:
         """
         Validates structural input feasibility.
         Returns: (is_valid, error_feedback_list, feedback_payload)
         """
         errors = []
-        feedback = {}
+        feedback = {
+            "retry_count": current_retry_count,
+            "max_retries": MAX_GATE_1_RETRIES,
+            "escalate_to_human": current_retry_count >= MAX_GATE_1_RETRIES
+        }
 
-        # 1. Check Total Zone & Footprint Capacity
+        # 1. Check Retry Limits
+        if current_retry_count >= MAX_GATE_1_RETRIES:
+            errors.append(
+                f"🚨 [Эскалация к архитектору]: Превышен лимит попыток AI ({MAX_GATE_1_RETRIES}). "
+                f"Запрошенные параметры требуют ручной корректировки архитектором на Гейте 3."
+            )
+
+        # 2. Check Total Zone & Footprint Capacity
         sum_buildings_area = sum(b.get("width", 0) * b.get("depth", 0) for b in requested_buildings)
         sum_zones_area = sum(z.get("area_sq_m", 0) for z in requested_zones)
         total_requested_footprint = sum_buildings_area + sum_zones_area
@@ -52,7 +67,7 @@ class QaGate1StructuralValidator:
                 f"Необходимо сократить площади зон минимум на {diff:.1f} м²."
             )
 
-        # 2. Hard Tag Matching for Plants (RAG Validation)
+        # 3. Hard Tag Matching for Plants (RAG Validation)
         valid_plants_db = query_plants_for_site(soil_type=soil_type)
         valid_plant_ids = {p["id"]: p for p in valid_plants_db}
         valid_plant_names = {p["species_ru"].lower(): p for p in valid_plants_db}
@@ -66,10 +81,10 @@ class QaGate1StructuralValidator:
         if unsuitable_plants:
             errors.append(
                 f"❌ Неподходящие растения для почвы '{soil_type}': {', '.join(unsuitable_plants)}. "
-                f"Используйте только проверенные культуры из дендрологического реестра."
+                f"Используйте только проверенные культуры из дендрологического реестра Крыма."
             )
 
-        # 3. Inject Legal Norms into Feedback Payload
+        # 4. Inject Legal Norms into Feedback Payload
         feedback["legal_setbacks"] = LEGAL_SETBACKS_M
         feedback["max_allowed_footprint_sq_m"] = max_allowed_footprint
         feedback["calculated_footprint_sq_m"] = total_requested_footprint

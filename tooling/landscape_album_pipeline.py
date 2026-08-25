@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
 Master Landscape & Architectural Project Album Pipeline.
-Fully Integrated with 3-Gate QA Architecture:
-Gate 1: Structural & Regulatory pre-check (Fail-Fast, СП/СНиП, Plant tags).
-Gate 2: Geometric & Topological invariants (Collisions, TEP balance, Golden Test).
+Fully Integrated with 3-Gate QA Architecture & Deterministic Solvers:
+Step 0: Input Classifier (Master Plan vs Floorplan vs Photo)
+Step 1: Gemini Vision Intent & Fact Retrieval (Crimea RAG)
+Gate 1: Structural & Regulatory pre-check (Fail-Fast, СП/СНиП, Plant tags, Retry limit).
+Step 2: Constraint & Snap Engine (0.5m grid, Parent-Child pool/decking, SNiP setbacks).
+Gate 2: Geometric & Topological invariants (Collisions, TEP balance, Multi-Site Golden Test).
+Step 3: Canonical Scene-Graph JSON (Single Source of Truth for 3D, 2D CAD, 13-Page PDF).
 Gate 3: Human Architect Review & Decision Log (Audit trail).
-Supports dynamic ingestion of Gemini Vision vectorized Scene Graphs.
 """
 
 import os
@@ -16,6 +19,8 @@ import argparse
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 
+from engine.input_classifier import InputClassifier, InputType
+from engine.constraint_solver import ConstraintSolver
 from engine.scene_graph import (
     LandscapeSceneGraph,
     BuildingNode,
@@ -227,6 +232,12 @@ def generate_landscape_project(
     print(f"🚀 [Pipeline] Starting Landscape Project Generation for: {address}")
 
     # =========================================================================
+    # 0. STEP 0: INPUT CLASSIFIER
+    # =========================================================================
+    classification = InputClassifier.classify(image_path=image_path, user_prompt=address)
+    print(f"🔍 [Input Classifier] Type: {classification.input_type.value} (Confidence: {classification.confidence*100:.0f}%) — {classification.description_ru}")
+
+    # =========================================================================
     # 1. FACT RETRIEVAL & GEOLOGY LOOKUP
     # =========================================================================
     facts = get_district_facts("kerch_geroevskoe")
@@ -334,7 +345,13 @@ def generate_landscape_project(
         ]
 
     # =========================================================================
-    # 3. QA GATES & CALIBRATION
+    # 3. STEP 2: DETERMINISTIC CONSTRAINT & SNAP ENGINE
+    # =========================================================================
+    print("📐 [Constraint & Snap Engine] Solving grid snapping (0.5m), Parent-Child hierarchy and SNiP alignments...")
+    scene = ConstraintSolver.solve_scene(scene)
+
+    # =========================================================================
+    # 4. QA GATE 2: GEOMETRIC INVARIANT CHECK
     # =========================================================================
     print("🛡️ [QA Gate 2] Validating Geometric Collision, Invariant & Balance check...")
     is_g2_valid, g2_errors = QaGate2GeometryValidator.validate_scene(scene)
@@ -345,13 +362,16 @@ def generate_landscape_project(
     print(f"📊 [TEP Summary] S_общ: {tep['S_total']} m² = S_зд: {tep['S_buildings']} m² + S_дтс: {tep['S_paving_total']} m² + S_зел: {tep['S_greenery']} m²")
 
     # =========================================================================
-    # 4. DECISION LOG & PDF PERSISTENCE
+    # 5. QA GATE 3: ARCHITECTURAL DECISION LOG
     # =========================================================================
     decision_log = DecisionLogger.generate_decision_log(scene)
     log_path = out_path / "decision_log.json"
     with open(log_path, "w", encoding="utf-8") as f:
         json.dump(decision_log, f, indent=2, ensure_ascii=False)
 
+    # =========================================================================
+    # 6. CANONICAL SCENE GRAPH JSON & 13-PAGE PDF PERSISTENCE
+    # =========================================================================
     json_path = out_path / "scene_graph.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(scene.to_dict(), f, indent=2, ensure_ascii=False)
@@ -365,12 +385,13 @@ def generate_landscape_project(
         "pdf_path": str(pdf_path),
         "json_path": str(json_path),
         "decision_log_path": str(log_path),
-        "tep": tep
+        "tep": tep,
+        "classification": classification.to_dict()
     }
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Landscape 13-Page Project Album Pipeline with Dynamic Scene Graph")
+    parser = argparse.ArgumentParser(description="Landscape 13-Page Project Album Pipeline with Constraint & Snap Engine")
     parser.add_argument("-i", "--image", help="Path to input photo/sketch", default=None)
     parser.add_argument("-a", "--address", help="Object address", default="г. Керчь, мкр. Героевское, пер. Генерала Косоногова, д. 12")
     parser.add_argument("-o", "--output", help="Output directory", default="./output_album_test")

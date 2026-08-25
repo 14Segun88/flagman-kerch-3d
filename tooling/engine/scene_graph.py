@@ -1,6 +1,7 @@
 """
 Canonical Scene-Graph Schema and Geometry Engine for Landscape & Architectural Projects.
-Single Source of Truth for 2D CAD Drawings, 3D Blender Engine, and 13-Page PDF Album.
+Single Source of Truth for 2D CAD Drawings, 3D WebGL / Blender Engine, and 13-Page PDF Album.
+Includes Parent-Child hierarchy for nested site components (e.g. pool in decking).
 """
 
 from dataclasses import dataclass, field
@@ -10,16 +11,15 @@ import json
 
 
 def calc_polygon_area(polygon: List[Tuple[float, float]]) -> float:
-    """Calculates polygon area in square meters using Shoelace formula."""
+    """Calculates polygon area in square meters using standard Shoelace formula."""
     if len(polygon) < 3:
         return 0.0
     area = 0.0
     n = len(polygon)
     for i in range(n):
         j = (i + 1) % n
-        area += polygon[i][0] * polygon[j][1]
-        area -= polygon[j][0] * polygon[i][1]
-    return abs(area) / 2.0
+        area += polygon[i][0] * polygon[j][1] - polygon[j][0] * polygon[i][1]
+    return round(abs(area) / 2.0, 2)
 
 
 @dataclass
@@ -35,7 +35,7 @@ class Point2D:
 class BuildingNode:
     id: str
     name: str
-    type: str  # 'residential', 'gazebo', 'bathhouse', 'shed', 'dome'
+    type: str  # 'residential', 'gazebo', 'bathhouse', 'shed', 'dome', 'cottage'
     origin: Tuple[float, float]
     dimensions: Tuple[float, float]  # [width, depth]
     height: float = 3.0
@@ -44,6 +44,7 @@ class BuildingNode:
     roof_type: str = "gable"  # 'gable', 'hip', 'flat', 'shed', 'dome'
     walls: List[Dict[str, Any]] = field(default_factory=list)
     openings: List[Dict[str, Any]] = field(default_factory=list)
+    parent_id: Optional[str] = None
 
     @property
     def area_sq_m(self) -> float:
@@ -73,6 +74,8 @@ class PavingZoneNode:
     material: str = "wood_dpk"
     elevation_m: float = 0.08  # 8cm above ground for DPK decking
     slope_percent: float = 1.5
+    parent_id: Optional[str] = None
+    is_nested: bool = False
 
     @property
     def area_sq_m(self) -> float:
@@ -89,6 +92,7 @@ class PlantNode:
     crown_diameter_m: float = 1.0
     height_m: float = 1.5
     symbol_code: str = "P"  # For CAD dendroplan notation
+    parent_id: Optional[str] = None
 
 
 @dataclass
@@ -100,6 +104,8 @@ class MafNode:
     dimensions: Tuple[float, float]
     height: float = 2.0
     details: Dict[str, Any] = field(default_factory=dict)
+    parent_id: Optional[str] = None
+    is_nested: bool = False  # True if embedded inside a parent zone (e.g. pool in decking)
 
     @property
     def area_sq_m(self) -> float:
@@ -217,7 +223,8 @@ class LandscapeSceneGraph:
                     "height": b.height,
                     "polygon": b.get_polygon(),
                     "facadeMaterial": b.facade_material,
-                    "roofType": b.roof_type
+                    "roofType": b.roof_type,
+                    "parentId": b.parent_id
                 }
                 for b in self.buildings
             ],
@@ -229,7 +236,9 @@ class LandscapeSceneGraph:
                     "polygon": p.polygon,
                     "areaSqM": p.area_sq_m,
                     "material": p.material,
-                    "elevationM": p.elevation_m
+                    "elevationM": p.elevation_m,
+                    "parentId": p.parent_id,
+                    "isNested": p.is_nested
                 }
                 for p in self.paving_zones
             ],
@@ -241,7 +250,8 @@ class LandscapeSceneGraph:
                     "category": pl.category,
                     "position": pl.position,
                     "crownDiameterM": pl.crown_diameter_m,
-                    "symbolCode": pl.symbol_code
+                    "symbolCode": pl.symbol_code,
+                    "parentId": pl.parent_id
                 }
                 for pl in self.plants
             ],
@@ -254,7 +264,9 @@ class LandscapeSceneGraph:
                     "dimensions": m.dimensions,
                     "areaSqM": m.area_sq_m,
                     "height": m.height,
-                    "details": m.details
+                    "details": m.details,
+                    "parentId": m.parent_id,
+                    "isNested": m.is_nested
                 }
                 for m in self.maf_elements
             ],
