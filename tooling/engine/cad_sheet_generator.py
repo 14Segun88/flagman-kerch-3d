@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 
 from .scene_graph import LandscapeSceneGraph, BuildingNode, PavingZoneNode, PlantNode, MafNode
 from .font_helper import get_cyrillic_font
+from .text_utils import fit_text_in_box
 
 
 class CadSheetGenerator:
@@ -76,19 +77,24 @@ class CadSheetGenerator:
         by0 = self.PAGE_HEIGHT - 110
         bx1 = self.PAGE_WIDTH - 30
         by1 = self.PAGE_HEIGHT - 30
+        stamp_text_w = bx1 - bx0 - 20
 
         draw.rectangle([(bx0, by0), (bx1, by1)], fill="#f8fafc", outline="#0f172a", width=2)
         draw.line([(bx0, by0 + 35), (bx1, by0 + 35)], fill="#0f172a", width=1)
         draw.line([(bx0, by0 + 55), (bx1, by0 + 55)], fill="#0f172a", width=1)
 
-        # Title Block Texts with TrueType Cyrillic font
-        draw.text((bx0 + 10, by0 + 8), self.scene.project_title[:38], fill="#0f172a", font=self.f_bold_small)
-        draw.text((bx0 + 10, by0 + 38), f"Лист {sheet_num}: {sheet_title}", fill="#0f172a", font=self.f_bold_small)
+        # Title Block Texts with TrueType Cyrillic font & auto-fitting (Bug #4 FIX)
+        proj_title, proj_font = fit_text_in_box(self.scene.project_title, self.f_bold_small, stamp_text_w)
+        draw.text((bx0 + 10, by0 + 8), proj_title, fill="#0f172a", font=proj_font)
+
+        sheet_txt, sheet_font = fit_text_in_box(f"Лист {sheet_num}: {sheet_title}", self.f_bold_small, stamp_text_w)
+        draw.text((bx0 + 10, by0 + 38), sheet_txt, fill="#0f172a", font=sheet_font)
+
         draw.text((bx0 + 10, by0 + 60), f"Масштаб {self.scene.scale} | {self.scene.year} г.", fill="#475569", font=self.f_small)
         draw.text((bx0 + 260, by0 + 60), "ФЛАГМАН", fill="#d97706", font=self.f_bold_small)
 
     def _draw_boundary(self, draw: ImageDraw.ImageDraw, fill_color: str = "#f1f5f9"):
-        """Draws property boundary polygon and dimensions."""
+        """Draws property boundary polygon and non-overlapping dimensions (Bug #11 FIX)."""
         screen_poly = [self.world_to_screen(p[0], p[1]) for p in self.scene.boundary_polygon]
         if len(screen_poly) >= 3:
             draw.polygon(screen_poly, fill=fill_color, outline="#0f172a", width=3)
@@ -102,7 +108,19 @@ class CadSheetGenerator:
                 mid_x = (p1[0] + p2[0]) / 2
                 mid_y = (p1[1] + p2[1]) / 2
                 sm_x, sm_y = self.world_to_screen(mid_x, mid_y)
-                draw.text((sm_x, sm_y), f"{dist:.1f} м", fill="#64748b", font=self.f_small)
+                
+                # Perpendicular offset outwards to avoid overlapping boundary line
+                dx = p2[0] - p1[0]
+                dy = p2[1] - p1[1]
+                length = math.sqrt(dx*dx + dy*dy) or 1.0
+                nx = -dy / length
+                ny = dx / length
+                
+                offset_px = 14
+                txt_x = sm_x + nx * offset_px
+                txt_y = sm_y - ny * offset_px
+                
+                draw.text((txt_x - 12, txt_y - 6), f"{dist:.1f} м", fill="#475569", font=self.f_small)
 
     def generate_sheet_06_situational_plan(self, output_png: Path) -> Path:
         """Лист 6: Ситуационный план (Границы, габариты, существующие строения)."""
@@ -192,7 +210,7 @@ class CadSheetGenerator:
 
         ex_x = self.PAGE_WIDTH - 380
         ex_y = 120
-        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 260)], fill="#f8fafc", outline="#cbd5e1", width=1)
+        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 320)], fill="#f8fafc", outline="#cbd5e1", width=1)
         draw.text((ex_x + 10, ex_y + 10), "Условные обозначения растений:", fill="#0f172a", font=self.f_sub)
         
         y_cursor = ex_y + 35
@@ -203,6 +221,60 @@ class CadSheetGenerator:
                 draw.text((ex_x + 10, y_cursor), f"[{pl.symbol_code}] {pl.species_ru}", fill="#334155", font=self.f_body)
                 draw.text((ex_x + 20, y_cursor + 16), f"({pl.species_lat})", fill="#64748b", font=self.f_small)
                 y_cursor += 36
+
+        img.save(str(output_png), "PNG")
+        return output_png
+
+    def generate_sheet_09_planting_plan(self, output_png: Path) -> Path:
+        """Лист 9: Посадочный план (Привязка посадочных ям, расстояния, ведомость посадок)."""
+        img = Image.new("RGB", (self.PAGE_WIDTH, self.PAGE_HEIGHT), "#ffffff")
+        draw = ImageDraw.Draw(img)
+
+        self._draw_sheet_frame(draw, 9, "План посадки (Посадочный чертеж)")
+        self._draw_boundary(draw, fill_color="#f0fdf4")
+
+        # Draw paving outline
+        for p in self.scene.paving_zones:
+            poly = [self.world_to_screen(pt[0], pt[1]) for pt in p.polygon]
+            draw.polygon(poly, fill="#f8fafc", outline="#cbd5e1", width=1)
+
+        # Draw buildings
+        for b in self.scene.buildings:
+            poly = [self.world_to_screen(pt[0], pt[1]) for pt in b.get_polygon()]
+            draw.polygon(poly, fill="#e2e8f0", outline="#1e293b", width=1)
+
+        # Draw planting centers with crosshairs + coordinate leader lines
+        for idx, pl in enumerate(self.scene.plants, 1):
+            sx, sy = self.world_to_screen(pl.position[0], pl.position[1])
+            # Draw planting pit circle
+            pit_rad = max(6, int((pl.crown_diameter_m / 2) * self.scale_ppm * 0.7))
+            draw.ellipse([(sx - pit_rad, sy - pit_rad), (sx + pit_rad, sy + pit_rad)], outline="#166534", width=2)
+            # Center cross
+            draw.line([(sx - 4, sy), (sx + 4, sy)], fill="#166534", width=1)
+            draw.line([(sx, sy - 4), (sx, sy + 4)], fill="#166534", width=1)
+            # Position coordinate tag
+            draw.text((sx + 5, sy - 8), f"№{idx} ({pl.position[0]:.1f}; {pl.position[1]:.1f})", fill="#1e293b", font=self.f_small)
+
+        # Explication: Посадочная ведомость
+        ex_x = self.PAGE_WIDTH - 380
+        ex_y = 120
+        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 350)], fill="#f8fafc", outline="#0f172a", width=1)
+        draw.text((ex_x + 10, ex_y + 10), "Посадочная ведомость:", fill="#0f172a", font=self.f_sub)
+
+        # Table header
+        draw.text((ex_x + 10, ex_y + 35), "№  Наименование породы         Кол-во   Яма (м)", fill="#475569", font=self.f_small)
+        draw.line([(ex_x + 10, ex_y + 50), (ex_x + 340, ex_y + 50)], fill="#cbd5e1", width=1)
+
+        y_cursor = ex_y + 56
+        for idx, pl in enumerate(self.scene.plants, 1):
+            pit_d = "0.8×0.8" if pl.category == "conifer" else "0.6×0.6" if pl.category == "deciduous" else "0.4×0.4"
+            line_str = f"{idx:<2} {pl.species_ru[:20]:<20} 1 шт   {pit_d}"
+            draw.text((ex_x + 10, y_cursor), line_str, fill="#1e293b", font=self.f_small)
+            y_cursor += 20
+
+        # Note at the bottom of table
+        draw.line([(ex_x + 10, y_cursor + 5), (ex_x + 340, y_cursor + 5)], fill="#cbd5e1", width=1)
+        draw.text((ex_x + 10, y_cursor + 12), "* Посадочный грунт: торф/песок 1:1 + биогумус", fill="#047857", font=self.f_small)
 
         img.save(str(output_png), "PNG")
         return output_png
@@ -275,7 +347,7 @@ class CadSheetGenerator:
 
         ex_x = self.PAGE_WIDTH - 380
         ex_y = 120
-        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 340)], fill="#f8fafc", outline="#0f172a", width=2)
+        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 360)], fill="#f8fafc", outline="#0f172a", width=2)
         draw.text((ex_x + 10, ex_y + 10), "Генеральная экспликация:", fill="#0f172a", font=self.f_sub)
 
         y_cursor = ex_y + 35

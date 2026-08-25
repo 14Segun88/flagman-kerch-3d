@@ -52,7 +52,7 @@ def generate_landscape_project(
     # 2. QA GATE 1: STRUCTURAL & REGULATORY PRE-CHECK (Fail-Fast)
     # =========================================================================
     print("🛡️ [QA Gate 1] Running Structural & СП/СНиП Regulatory pre-validation...")
-    req_buildings = [{"name": "Дом", "width": 6, "depth": 6}, {"name": "Баня", "width": 2.5, "depth": 4}]
+    req_buildings = [{"name": "Дом", "width": 6, "depth": 6}, {"name": "Баня", "width": 4.0, "depth": 5.0}]
     req_zones = [{"name": "Террасы", "area_sq_m": 186.0}]
     req_plant_names = ["Сосна черная «НАНА»", "Можжевельник Виргинский", "Лаванда узколистная"]
 
@@ -72,7 +72,7 @@ def generate_landscape_project(
     print("✅ [QA Gate 1 PASSED]: Пятно застройки и теги растений в норме.")
 
     # =========================================================================
-    # 3. BUILD CANONICAL SCENE GRAPH
+    # 3. BUILD CANONICAL SCENE GRAPH (Bug #8 FIX: Exactly 1000.0 m² boundary)
     # =========================================================================
     scene = LandscapeSceneGraph(
         project_id="FL-KERCH-2024-012",
@@ -81,7 +81,7 @@ def generate_landscape_project(
         author="Ландшафтный архитектор Анна (+7 978 066-23-80)",
         year=2024,
         scale="1:200",
-        boundary_polygon=[(0.0, 0.0), (31.2, 0.0), (32.6, 28.9), (0.0, 33.8)],
+        boundary_polygon=[(0.0, 0.0), (31.25, 0.0), (31.25, 30.0), (0.0, 34.0)],
         climate_text=(
             f"Микроклимат объекта ({facts['name']}):\n"
             f"• Средняя температура летом: {facts['temp_summer_avg']}, зимой: {facts['temp_winter_avg']}.\n"
@@ -102,14 +102,14 @@ def generate_landscape_project(
         )
     )
 
-    # Add Buildings
+    # Add Buildings (Bug #9 FIX: Enlarged Bathhouse to 20.0 m²)
     scene.buildings = [
         BuildingNode(id="b_dome_1", name="Дом-купол №1", type="dome", origin=(6.0, 20.0), dimensions=(6.0, 6.0), roof_type="dome"),
         BuildingNode(id="b_dome_2", name="Дом-купол №2", type="dome", origin=(16.0, 20.0), dimensions=(6.0, 6.0), roof_type="dome"),
-        BuildingNode(id="b_main", name="Существующий дом", type="residential", origin=(6.0, 10.0), dimensions=(6.0, 6.0), roof_type="gable"),
+        BuildingNode(id="b_main", name="Существующий дом", type="residential", origin=(6.0, 11.0), dimensions=(6.0, 6.0), roof_type="gable"),
         BuildingNode(id="b_proj", name="Проектируемый дом", type="residential", origin=(6.0, 3.0), dimensions=(6.0, 4.0), roof_type="gable"),
         BuildingNode(id="b_gazebo", name="Беседка для отдыха", type="gazebo", origin=(14.0, 3.0), dimensions=(6.0, 6.0), roof_type="hip"),
-        BuildingNode(id="b_bath", name="Баня с парной", type="bathhouse", origin=(22.0, 8.0), dimensions=(2.5, 4.0), roof_type="gable"),
+        BuildingNode(id="b_bath", name="Баня с парной", type="bathhouse", origin=(23.0, 6.0), dimensions=(4.0, 5.0), roof_type="gable"),
     ]
 
     # Add Paving Zones
@@ -118,7 +118,7 @@ def generate_landscape_project(
             id="p_decking_main",
             name="Главный настил из ДПК (террасы)",
             type="decking_dpk",
-            polygon=[(12.0, 2.0), (28.0, 2.0), (28.0, 14.0), (20.0, 14.0), (20.0, 8.0), (12.0, 8.0)],
+            polygon=[(12.0, 2.0), (28.0, 2.0), (28.0, 15.0), (20.0, 15.0), (20.0, 8.0), (12.0, 8.0)],
             material="wood_dpk",
             elevation_m=0.08
         ),
@@ -142,21 +142,27 @@ def generate_landscape_project(
 
     # Add MAF Elements
     scene.maf_elements = [
-        MafNode(id="m_pool", name="Бассейн с зоной шезлонгов", type="pool", position=(21.0, 16.0), dimensions=(6.0, 4.0)),
-        MafNode(id="m_tubs", name="2 Уличные купели", type="hot_tub", position=(22.0, 12.5), dimensions=(2.5, 2.0)),
+        MafNode(id="m_pool", name="Бассейн с зоной шезлонгов", type="pool", position=(23.0, 16.0), dimensions=(6.0, 4.0)),
+        MafNode(id="m_tubs", name="2 Уличные купели", type="hot_tub", position=(23.0, 12.0), dimensions=(2.5, 2.0)),
         MafNode(id="m_canopy", name="Навес зоны BBQ (H=2.7м)", type="bbq_canopy", position=(6.0, 2.0), dimensions=(6.0, 4.0)),
         MafNode(id="m_wood", name="Дровница", type="wood_storage", position=(1.0, 1.0), dimensions=(7.0, 0.4)),
     ]
 
-    # Add Plants
+    # Add Plants (Bug #12 FIX: Distributed across whole site zones)
     scene.plants = [
-        PlantNode(id="pl_1", species_ru="Сосна черная «НАНА»", species_lat="Pinus nigra Nana", category="conifer", position=(3.0, 30.0), crown_diameter_m=1.8, symbol_code="СЧ"),
-        PlantNode(id="pl_2", species_ru="Можжевельник Виргинский", species_lat="Juniperus virginiana", category="conifer", position=(6.0, 30.0), crown_diameter_m=1.2, symbol_code="МВ"),
-        PlantNode(id="pl_3", species_ru="Можжевельник Казацкий", species_lat="Juniperus sabina", category="conifer", position=(9.0, 28.0), crown_diameter_m=2.5, symbol_code="МК"),
-        PlantNode(id="pl_4", species_ru="Спирея Вангутта", species_lat="Spiraea vanhouttei", category="deciduous", position=(14.0, 29.0), crown_diameter_m=2.0, symbol_code="СВ"),
-        PlantNode(id="pl_5", species_ru="Клен ясенелистный", species_lat="Acer negundo", category="deciduous", position=(25.0, 28.0), crown_diameter_m=3.0, symbol_code="КЯ"),
-        PlantNode(id="pl_6", species_ru="Лаванда узколистная", species_lat="Lavandula angustifolia", category="perennial", position=(26.0, 22.0), crown_diameter_m=0.6, symbol_code="ЛВ"),
-        PlantNode(id="pl_7", species_ru="Котовник Фассена", species_lat="Nepeta faassenii", category="perennial", position=(26.0, 20.0), crown_diameter_m=0.5, symbol_code="КТ"),
+        # North / boundary wind protection hedge
+        PlantNode(id="pl_1", species_ru="Сосна черная «НАНА»", species_lat="Pinus nigra Nana", category="conifer", position=(3.0, 31.0), crown_diameter_m=1.8, symbol_code="СЧ"),
+        PlantNode(id="pl_2", species_ru="Можжевельник Виргинский", species_lat="Juniperus virginiana", category="conifer", position=(7.0, 31.0), crown_diameter_m=1.2, symbol_code="МВ"),
+        PlantNode(id="pl_3", species_ru="Можжевельник Казацкий", species_lat="Juniperus sabina", category="conifer", position=(12.0, 29.0), crown_diameter_m=2.2, symbol_code="МК"),
+        PlantNode(id="pl_4", species_ru="Спирея Вангутта", species_lat="Spiraea vanhouttei", category="deciduous", position=(18.0, 30.0), crown_diameter_m=2.0, symbol_code="СВ"),
+        PlantNode(id="pl_5", species_ru="Клен ясенелистный", species_lat="Acer negundo", category="deciduous", position=(26.0, 28.0), crown_diameter_m=3.0, symbol_code="КЯ"),
+        # Central & Pool SPA terrace borders
+        PlantNode(id="pl_6", species_ru="Лаванда узколистная", species_lat="Lavandula angustifolia", category="perennial", position=(21.0, 22.0), crown_diameter_m=0.8, symbol_code="ЛВ"),
+        PlantNode(id="pl_7", species_ru="Котовник Фассена", species_lat="Nepeta faassenii", category="perennial", position=(14.0, 17.0), crown_diameter_m=0.6, symbol_code="КТ"),
+        PlantNode(id="pl_8", species_ru="Лаванда узколистная", species_lat="Lavandula angustifolia", category="perennial", position=(21.0, 11.0), crown_diameter_m=0.8, symbol_code="ЛВ"),
+        # South / BBQ & entrance zones
+        PlantNode(id="pl_9", species_ru="Барбарис Тунберга", species_lat="Berberis thunbergii", category="deciduous", position=(2.0, 5.0), crown_diameter_m=1.2, symbol_code="БТ"),
+        PlantNode(id="pl_10", species_ru="Сирень венгерская", species_lat="Syringa josikaea", category="deciduous", position=(2.0, 10.0), crown_diameter_m=1.8, symbol_code="СВ"),
     ]
 
     # =========================================================================

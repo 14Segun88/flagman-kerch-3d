@@ -19,7 +19,9 @@ function findWorkspaceRoot(): string {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const address = body.address || 'г. Керчь, мкр. Героевское, пер. Генерала Косоногова, д. 12'
+    const address = (body.address && typeof body.address === 'string' && body.address.trim())
+      ? body.address.trim()
+      : 'г. Керчь, мкр. Героевское, пер. Генерала Косоногова, д. 12'
     const imageBase64 = body.imageBase64 || body.image
 
     const rootDir = findWorkspaceRoot()
