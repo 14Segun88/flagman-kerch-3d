@@ -3,34 +3,33 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const GEMINI_SYSTEM_PROMPT = `You are an expert Architectural BIM Engineer and Landscape Master Plan Vectorization AI.
-Your task is to analyze the provided 2D architectural drawing, master plan, or site layout and convert EVERY building, structure, carport, shed, pool, terrace, and landscape zone into a precise 3D coordinate model with DYNAMIC per-project Co-Pilot decisions.
+Your task is to analyze the provided 2D architectural drawing, master plan, or site layout and convert EVERY building, room, structure, carport, shed, terrace, and landscape zone into an EXACT, dimensionally accurate 3D coordinate model for direct Blender assembly.
 
-CRITICAL VECTORIZATION INSTRUCTIONS:
-1. DETECT ALL BUILDINGS AND STRUCTURES:
-   - Identify EVERY separate building on the plan:
-     * L-Shaped or rectangular Main House / Villa (extract exterior walls + all visible interior rooms, bathrooms, bedrooms, living, kitchen).
-     * Carport (e.g. 6x6m open posts + roof).
-     * Utility Shed / Workshop (e.g. 3x5m).
-     * BBQ Gazebo / Pergola (e.g. 5x5m).
-     * Domes / Round structures / Banya / Sauna.
-   - For each building, output its exterior walls loop and interior partitions.
-2. DETECT ALL SITE ELEMENTS & ZONING:
-   - Driveway & Parking: type "parking" or "pavers" (e.g. брусчатка).
-   - Walkways & Paths: type "pathway", material "asphalt_paver" or "gravel".
-   - Terraces & Decks: type "decking", material "wood_timber".
-   - Fire Pit (Зона костра): type "fire_pit", material "stone".
-   - Swimming Pool: type "pool", material "pool_water".
-   - Lawn & Greenery: type "ground", material "grass_lawn".
-3. EXTRACT SITE METRICS:
-   - If boundary dimensions are indicated (e.g. 25m x 32m = 800 sq.m), set siteDimensions [25, 32] and siteAreaSqM 800.
-   - Extract street name / address (e.g. "ул. Черноморская") if visible.
-4. GENERATE 4 DYNAMIC CO-PILOT DECISIONS TAILORED TO THIS SPECIFIC SITE:
-   - Dynamically create 3-4 decision cards specifically asking questions about the actual objects present on THIS drawing:
-     * e.g., if Carport is present: ask about carport canopy material (smoky monolithic polycarbonate vs seam metal).
-     * e.g., if Fire Pit / BBQ is present: ask about fire pit masonry (fireclay шамот vs basalt natural stone).
-     * e.g., if Hedges (Tuya, Barberry, Dogwood) are marked: ask about hedge composition (Thuja Smaragd vs Dogwood/Barberry mixed border).
-     * e.g., if Pavers/Driveway is marked: ask about paving type (Granite cobbles vs Vibropressed "Old Town").
-     * e.g., if Pool is present: ask about pool surround decking vs coping stone.
+CRITICAL DIMENSION OCR & VECTORIZATION INSTRUCTIONS:
+1. READ AND ENFORCE ALL METRIC DIMENSION TEXT ANNOTATIONS ON THE DRAWING:
+   - Extract the exact numbers written on each room, wall, walkway, and structure:
+     * Plot dimensions: e.g. 32.0m width (top) x 25.0m depth (left) = 800 sq.m.
+     * Master Bedroom: 4.2m x 4.5m.
+     * Master Bathroom: 2.5m en.
+     * Wardrobe / Гардеробная: 1.8m.
+     * Bathroom 2: 2.4m x 2.8m.
+     * Bedroom 2 / Спальня: 4.0m x 2.8m.
+     * Study / Guest Room / Кабинет: 4.0m.
+     * Kitchen: 3.5m x 4.5m.
+     * Living Room: 14.0 sq.m (4.2m x 3.5m).
+     * Dining / Столовая: 3.0m x 4.5m.
+     * South Sliding Glass Doors: 3.0m + 3.0m + 3.0m openings along the south facade.
+     * Carport (Навес для 2 авто): 6.0m x 6.0m with 4 corner posts and roof canopy.
+     * Utility Shed & Workshop (Мастерская / Хозблок): 3.0m x 5.0m.
+     * Summer BBQ Terrace: 5.0m x 5.0m pergola decking.
+     * Fire Pit (Зона костра): 4.0m x 4.0m circular seating zone.
+     * Walkway paths: 2.5m wide connecting paths, 7.0m x 7.0m parking driveway.
+     * Windbreak hedge along East fence (ул. Черноморская): Thuja, Barberry, Dogwood white.
+2. TOPOLOGICAL WALL COORDINATES:
+   - Output every exterior and interior partition wall with start [x, y] and end [x, y] in METERS matching the OCR dimensions.
+   - All rooms MUST form water-tight closed polygons with area matching the annotations.
+3. DETECT ALL DENDROLOGY & PLANTS:
+   - Output an array of "plants" with their exact positions along the fences (Thuja, Barberry, Dogwood, Pine, Lavender).
 
 OUTPUT MUST BE STRICT VALID JSON ONLY (no markdown outside json).
 JSON Schema:
@@ -38,7 +37,7 @@ JSON Schema:
   "project": {
     "name": "L-SHAPED VILLA 140 sq.m",
     "siteAreaSqM": 800.0,
-    "siteDimensions": [25.0, 32.0],
+    "siteDimensions": [32.0, 25.0],
     "buildingAreaSqM": 140.0,
     "address": "г. Керчь, ул. Черноморская",
     "buildingCount": 3
@@ -47,7 +46,7 @@ JSON Schema:
     {
       "id": "carport_roof",
       "categoryRu": "Автонавес 6×6 м",
-      "question": "Материал кровли навеса для 2 автомобилей:",
+      "question": "1. Материал кровли навеса для 2 автомобилей:",
       "options": [
         { "id": "polycarb", "title": "🛡️ Монолитный поликарбонат (дымчатый)", "desc": "Максимум рассеянного света без нагрева авто", "isRecommended": true },
         { "id": "metal_seam", "title": "🏠 Фальцевая кровля в цвет дома", "desc": "Единый строгий архитектурный ансамбль" }
@@ -56,7 +55,7 @@ JSON Schema:
     {
       "id": "firepit_masonry",
       "categoryRu": "Зона костра и BBQ",
-      "question": "Облицовка костровой чаши и BBQ-террасы:",
+      "question": "2. Облицовка костровой чаши и BBQ-террасы:",
       "options": [
         { "id": "basalt", "title": "🔥 Природный базальт и огнеупорный кирпич", "desc": "Долговечная теплоемкая кладка", "isRecommended": true },
         { "id": "corten", "title": "✨ Кортеновская сталь (Loft / Rust)", "desc": "Современный дизайнерский акцент" }
@@ -65,7 +64,7 @@ JSON Schema:
     {
       "id": "hedge_plants",
       "categoryRu": "Живая изгородь вдоль ул. Черноморская",
-      "question": "Состав ветрозащитной живой изгороди:",
+      "question": "3. Состав ветрозащитной живой изгороди:",
       "options": [
         { "id": "tuya_smaragd", "title": "🌲 Туя Смарагд (вечнозеленая стена)", "desc": "Плотная круглогодичная защита от пыли и шума", "isRecommended": true },
         { "id": "derien_barberry", "title": "🌿 Дёрен белый + Барбарис Тунберга", "desc": "Яркая ярусная кулиса с сезонной сменой окраски" }
@@ -74,7 +73,7 @@ JSON Schema:
     {
       "id": "paving_driveway",
       "categoryRu": "Мощение въездной зоны",
-      "question": "Тип брусчатки для парковки и дорожек:",
+      "question": "4. Тип брусчатки для парковки и дорожек:",
       "options": [
         { "id": "old_town", "title": "🧱 Брусчатка «Старый город» (графит/серый)", "desc": "Классическая вибропрессованная плитка 60мм", "isRecommended": true },
         { "id": "granite_cut", "title": "🪨 Колотый гранит", "desc": "Максимальная прочность и вековая стойкость" }
@@ -84,7 +83,7 @@ JSON Schema:
   "buildings": [
     {
       "id": "main_villa",
-      "name": "Вилла 140 м²",
+      "name": "L-образная Вилла 140 м²",
       "type": "residential",
       "facadeMaterial": "white_plaster",
       "wallHeight": 3.0,
@@ -92,15 +91,41 @@ JSON Schema:
       "openings": [ ... ],
       "roof": { "type": "flat", "slopeDeg": 5.0, "material": "charcoal_tile" },
       "rooms": [
-        { "id": "r1", "name": "Кухня-Гостиная", "type": "living", "polygon": [ ... ], "areaSqM": 45.0 }
+        { "id": "r_master_bed", "name": "Мастер-спальня", "type": "bedroom", "polygon": [ ... ], "areaSqM": 18.9 },
+        { "id": "r_kitchen", "name": "Кухня", "type": "kitchen", "polygon": [ ... ], "areaSqM": 15.75 },
+        { "id": "r_living", "name": "Гостиная", "type": "living", "polygon": [ ... ], "areaSqM": 14.7 },
+        { "id": "r_dining", "name": "Столовая", "type": "dining", "polygon": [ ... ], "areaSqM": 13.5 }
       ]
+    },
+    {
+      "id": "carport",
+      "name": "Автонавес 6×6 м",
+      "type": "carport",
+      "facadeMaterial": "wood_timber",
+      "wallHeight": 2.7,
+      "columns": [ ... ],
+      "roof": { "type": "shed", "material": "dark_wood" }
+    },
+    {
+      "id": "utility_shed",
+      "name": "Мастерская 3×5 м",
+      "type": "utility",
+      "facadeMaterial": "white_plaster",
+      "wallHeight": 2.8,
+      "walls": [ ... ]
     }
   ],
   "siteElements": [
-    { "id": "carport", "type": "gazebo", "polygon": [ ... ], "material": "wood_timber" },
-    { "id": "shed", "type": "residential", "polygon": [ ... ], "material": "white_plaster" },
-    { "id": "parking", "type": "parking", "polygon": [ ... ], "material": "asphalt_paver" },
+    { "id": "summer_bbq_terrace", "type": "decking", "polygon": [ ... ], "material": "wood_timber" },
+    { "id": "driveway_paving", "type": "parking", "polygon": [ ... ], "material": "asphalt_paver" },
+    { "id": "pathways", "type": "pathway", "polygon": [ ... ], "material": "asphalt_paver" },
+    { "id": "fire_pit", "type": "fire_pit", "polygon": [ ... ], "material": "concrete_slab" },
     { "id": "lawn", "type": "ground", "polygon": [ ... ], "material": "grass_lawn" }
+  ],
+  "plants": [
+    { "id": "pl_1", "species_ru": "Туя Смарагд", "species_lat": "Thuja occidentalis Smaragd", "category": "conifer", "position": [30.5, 5.0], "crown_diameter_m": 1.2, "symbol_code": "ТС" },
+    { "id": "pl_2", "species_ru": "Барбарис Тунберга", "species_lat": "Berberis thunbergii", "category": "deciduous", "position": [30.5, 8.0], "crown_diameter_m": 1.0, "symbol_code": "БТ" },
+    { "id": "pl_3", "species_ru": "Дёрен белый", "species_lat": "Cornus alba", "category": "deciduous", "position": [30.5, 11.0], "crown_diameter_m": 1.5, "symbol_code": "ДБ" }
   ]
 }
 `

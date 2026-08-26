@@ -419,65 +419,109 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
   // Fallback high-precision model if offline
   const getFallbackProjectData = (): VectorizedProjectData => ({
     project: {
-      name: 'Усадьба «Флагман» (AI Generated)',
-      totalAreaSqM: 145.0,
+      name: 'L-SHAPED VILLA 140 sq.m',
+      totalAreaSqM: 140.0,
+      siteAreaSqM: 800.0,
+      siteDimensions: [32.0, 25.0],
+      address: 'г. Керчь, ул. Черноморская',
       buildingCount: 3,
     },
     buildings: [
       {
-        id: 'main_house',
-        name: 'Основной L-Дом',
+        id: 'main_villa',
+        name: 'L-образная Вилла 140 м²',
         type: 'residential',
         facadeMaterial: facadeStyle,
         wallHeight: wallHeight,
         walls: [
-          { id: 'w1', start: [-4.0, -3.5], end: [6.5, -3.5], thickness: 0.35, height: wallHeight, isExterior: true },
-          { id: 'w2', start: [6.5, -3.5], end: [6.5, 3.5], thickness: 0.35, height: wallHeight, isExterior: true },
-          { id: 'w3', start: [6.5, 3.5], end: [1.5, 3.5], thickness: 0.35, height: wallHeight, isExterior: true },
-          { id: 'w4', start: [1.5, 3.5], end: [1.5, 7.0], thickness: 0.35, height: wallHeight, isExterior: true },
-          { id: 'w5', start: [1.5, 7.0], end: [-4.0, 7.0], thickness: 0.35, height: wallHeight, isExterior: true },
-          { id: 'w6', start: [-4.0, 7.0], end: [-4.0, -3.5], thickness: 0.35, height: wallHeight, isExterior: true },
-          { id: 'w_int', start: [1.5, -3.5], end: [1.5, 3.5], thickness: 0.15, height: wallHeight, isExterior: false },
+          // Exterior Envelope (14.5m x 10.2m)
+          { id: 'w_south', start: [-12.0, -3.5], end: [2.5, -3.5], thickness: 0.35, height: wallHeight, isExterior: true },
+          { id: 'w_east', start: [2.5, -3.5], end: [2.5, 6.7], thickness: 0.35, height: wallHeight, isExterior: true },
+          { id: 'w_north', start: [2.5, 6.7], end: [-12.0, 6.7], thickness: 0.35, height: wallHeight, isExterior: true },
+          { id: 'w_west', start: [-12.0, 6.7], end: [-12.0, -3.5], thickness: 0.35, height: wallHeight, isExterior: true },
+          // Internal Dividing Spine (Separating Day Zone and Night Zone)
+          { id: 'w_spine_h', start: [-12.0, 1.5], end: [2.5, 1.5], thickness: 0.2, height: wallHeight, isExterior: false },
+          // Kitchen / Living Partition
+          { id: 'w_kitchen_div', start: [-7.5, -3.5], end: [-7.5, 1.5], thickness: 0.15, height: wallHeight, isExterior: false },
+          // Living / Dining Partition
+          { id: 'w_living_div', start: [-2.0, -3.5], end: [-2.0, 1.5], thickness: 0.15, height: wallHeight, isExterior: false },
+          // Master Bedroom Wall
+          { id: 'w_master_v', start: [-7.8, 1.5], end: [-7.8, 6.7], thickness: 0.15, height: wallHeight, isExterior: false },
+          // Study / Bedroom 2 Partition
+          { id: 'w_study_v', start: [-2.0, 1.5], end: [-2.0, 6.7], thickness: 0.15, height: wallHeight, isExterior: false },
         ],
         openings: [
-          { id: 'd1', wallId: 'w1', type: 'door', positionFromStart: 2.0, width: 1.0, height: 2.1, sillHeight: 0.0, label: 'Главный вход' },
-          { id: 'win1', wallId: 'w1', type: 'window', positionFromStart: 4.5, width: 1.6, height: 1.5, sillHeight: 0.9, label: 'Окно кухни' },
-          { id: 'win2', wallId: 'w2', type: 'window', positionFromStart: 2.5, width: 1.8, height: 1.5, sillHeight: 0.9, label: 'Окно гостиной' },
+          // 3x 3.0m South Glass Sliding Doors
+          { id: 'glass_door_1', wallId: 'w_south', type: 'window', positionFromStart: 2.5, width: 3.0, height: 2.5, sillHeight: 0.0, label: 'Стеклянные двери кухни' },
+          { id: 'glass_door_2', wallId: 'w_south', type: 'window', positionFromStart: 7.0, width: 3.0, height: 2.5, sillHeight: 0.0, label: 'Стеклянные двери гостиной' },
+          { id: 'glass_door_3', wallId: 'w_south', type: 'window', positionFromStart: 11.5, width: 3.0, height: 2.5, sillHeight: 0.0, label: 'Стеклянные двери столовой' },
         ],
         roof: {
           type: roofType,
           ridgeAxis: 'X',
-          slopeDeg: 25.0,
+          slopeDeg: 18.0,
           overhang: 0.5,
           material: 'charcoal_tile',
         },
         rooms: [
-          { id: 'r1', name: 'Гостиная-Столовая', type: 'living', polygon: [[-4.0, -3.5], [1.5, -3.5], [1.5, 7.0], [-4.0, 7.0]], areaSqM: 58.0, floorMaterial: 'parquet' },
-          { id: 'r2', name: 'Кухня и Спальня', type: 'kitchen', polygon: [[1.5, -3.5], [6.5, -3.5], [6.5, 3.5], [1.5, 3.5]], areaSqM: 35.0, floorMaterial: 'ceramic_tile' },
+          { id: 'r_master', name: 'Мастер-спальня (4.2×4.5м)', type: 'bedroom', polygon: [[-12.0, 2.2], [-7.8, 2.2], [-7.8, 6.7], [-12.0, 6.7]], areaSqM: 18.9, floorMaterial: 'parquet' },
+          { id: 'r_bath1', name: 'Мастер-санузел и гардеробная', type: 'bathroom', polygon: [[-7.8, 2.2], [-4.5, 2.2], [-4.5, 6.7], [-7.8, 6.7]], areaSqM: 14.5, floorMaterial: 'ceramic_tile' },
+          { id: 'r_bath2', name: 'Санузел (2.4×2.8м)', type: 'bathroom', polygon: [[-4.5, 2.2], [-2.0, 2.2], [-2.0, 6.7], [-4.5, 6.7]], areaSqM: 6.7, floorMaterial: 'ceramic_tile' },
+          { id: 'r_bed2', name: 'Спальня 2 (4.0×2.8м)', type: 'bedroom', polygon: [[-2.0, 3.9], [2.5, 3.9], [2.5, 6.7], [-2.0, 6.7]], areaSqM: 11.2, floorMaterial: 'parquet' },
+          { id: 'r_study', name: 'Кабинет / Гостевая', type: 'study', polygon: [[-2.0, 1.5], [2.5, 1.5], [2.5, 3.9], [-2.0, 3.9]], areaSqM: 10.8, floorMaterial: 'parquet' },
+          { id: 'r_kitchen', name: 'Кухня (3.5×4.5м)', type: 'kitchen', polygon: [[-12.0, -3.5], [-7.5, -3.5], [-7.5, 1.5], [-12.0, 1.5]], areaSqM: 15.7, floorMaterial: 'ceramic_tile' },
+          { id: 'r_living', name: 'Гостиная (14.0 м²)', type: 'living', polygon: [[-7.5, -3.5], [-2.0, -3.5], [-2.0, 1.5], [-7.5, 1.5]], areaSqM: 14.0, floorMaterial: 'parquet' },
+          { id: 'r_dining', name: 'Столовая (3.0×4.5м)', type: 'dining', polygon: [[-2.0, -3.5], [2.5, -3.5], [2.5, 1.5], [-2.0, 1.5]], areaSqM: 13.5, floorMaterial: 'parquet' },
         ],
       },
       {
-        id: 'bathhouse',
-        name: 'Баня с террасой',
-        type: 'bathhouse',
+        id: 'carport',
+        name: 'Автонавес 6×6 м (на 2 авто)',
+        type: 'carport',
         facadeMaterial: 'wood_timber',
+        wallHeight: 2.7,
+        walls: [
+          { id: 'cw1', start: [6.0, 3.5], end: [12.0, 3.5], thickness: 0.15, height: 2.7, isExterior: true },
+          { id: 'cw2', start: [12.0, 3.5], end: [12.0, 9.5], thickness: 0.15, height: 2.7, isExterior: true },
+          { id: 'cw3', start: [12.0, 9.5], end: [6.0, 9.5], thickness: 0.15, height: 2.7, isExterior: true },
+          { id: 'cw4', start: [6.0, 9.5], end: [6.0, 3.5], thickness: 0.15, height: 2.7, isExterior: true },
+        ],
+        roof: { type: 'flat', slopeDeg: 3.0, overhang: 0.2, material: 'dark_wood' },
+        rooms: [
+          { id: 'carport_floor', name: 'Парковка 2 авто', type: 'parking', polygon: [[6.0, 3.5], [12.0, 3.5], [12.0, 9.5], [6.0, 9.5]], areaSqM: 36.0, floorMaterial: 'asphalt_paver' }
+        ]
+      },
+      {
+        id: 'utility_shed',
+        name: 'Мастерская и хозблок (3×5 м)',
+        type: 'utility',
+        facadeMaterial: 'white_plaster',
         wallHeight: 2.8,
         walls: [
-          { id: 'bw1', start: [-11.0, 2.0], end: [-6.0, 2.0], thickness: 0.3, height: 2.8, isExterior: true },
-          { id: 'bw2', start: [-6.0, 2.0], end: [-6.0, 9.0], thickness: 0.3, height: 2.8, isExterior: true },
-          { id: 'bw3', start: [-6.0, 9.0], end: [-11.0, 9.0], thickness: 0.3, height: 2.8, isExterior: true },
-          { id: 'bw4', start: [-11.0, 9.0], end: [-11.0, 2.0], thickness: 0.3, height: 2.8, isExterior: true },
+          { id: 'sw1', start: [8.5, -2.5], end: [11.5, -2.5], thickness: 0.25, height: 2.8, isExterior: true },
+          { id: 'sw2', start: [11.5, -2.5], end: [11.5, 2.5], thickness: 0.25, height: 2.8, isExterior: true },
+          { id: 'sw3', start: [11.5, 2.5], end: [8.5, 2.5], thickness: 0.25, height: 2.8, isExterior: true },
+          { id: 'sw4', start: [8.5, 2.5], end: [8.5, -2.5], thickness: 0.25, height: 2.8, isExterior: true },
         ],
-        roof: { type: 'gable', ridgeAxis: 'Y', slopeDeg: 22.0, overhang: 0.4, material: 'charcoal_tile' },
+        roof: { type: 'gable', ridgeAxis: 'Y', slopeDeg: 15.0, overhang: 0.3, material: 'charcoal_tile' },
         rooms: [
-          { id: 'br1', name: 'Парная и отдых', type: 'bath', polygon: [[-11.0, 2.0], [-6.0, 2.0], [-6.0, 9.0], [-11.0, 9.0]], areaSqM: 35.0, floorMaterial: 'parquet' },
-        ],
-      },
+          { id: 'shed_room', name: 'Мастерская', type: 'utility', polygon: [[8.5, -2.5], [11.5, -2.5], [11.5, 2.5], [8.5, 2.5]], areaSqM: 15.0, floorMaterial: 'ceramic_tile' }
+        ]
+      }
     ],
     siteElements: [
-      { id: 'lawn', type: 'ground', polygon: [[-15.0, -14.0], [15.0, -14.0], [15.0, 14.0], [-15.0, 14.0]], material: 'grass_lawn' },
-      { id: 'pool', type: 'water', polygon: [[-10.0, -6.5], [-5.5, -6.5], [-5.5, -1.5], [-10.0, -1.5]], material: 'pool_water' },
-      { id: 'parking', type: 'pavers', polygon: [[-1.0, -12.0], [6.0, -12.0], [6.0, -6.0], [-1.0, -6.0]], material: 'asphalt_paver' },
+      // Full Site Grass Lawn (32x25m)
+      { id: 'lawn', type: 'ground', polygon: [[-16.0, -12.5], [16.0, -12.5], [16.0, 12.5], [-16.0, 12.5]], material: 'grass_lawn' },
+      // Front DPK Terrace (2.5m in front of villa)
+      { id: 'front_terrace', type: 'decking', polygon: [[-12.0, -6.0], [2.5, -6.0], [2.5, -3.5], [-12.0, -3.5]], material: 'wood_timber' },
+      // Summer BBQ Terrace 5x5m
+      { id: 'summer_bbq_terrace', type: 'decking', polygon: [[2.5, -3.5], [7.5, -3.5], [7.5, 1.5], [2.5, 1.5]], material: 'wood_timber' },
+      // Driveway Paving & Parking (7x7m)
+      { id: 'driveway', type: 'parking', polygon: [[5.5, 2.5], [15.0, 2.5], [15.0, 11.5], [5.5, 11.5]], material: 'asphalt_paver' },
+      // Walkways (2.5m wide connecting paths)
+      { id: 'walkways', type: 'pathway', polygon: [[-13.0, -3.5], [-12.0, -3.5], [-12.0, 7.5], [-13.0, 7.5]], material: 'asphalt_paver' },
+      // Fire Pit 4x4m (Зона костра)
+      { id: 'fire_pit', type: 'fire_pit', polygon: [[-11.0, -11.0], [-7.0, -11.0], [-7.0, -7.0], [-11.0, -7.0]], material: 'stone' },
     ],
   });
 
