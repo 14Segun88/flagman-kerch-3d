@@ -106,7 +106,9 @@ def setup_materials_catalog():
         "ceramic_tile": create_pbr_material("Mat_FloorTile", "#e2e8f0", roughness=0.25),
         "grass_lawn": create_pbr_material("Mat_GrassLawn", "#2e5339", roughness=0.9),
         "pool_water": create_pbr_material("Mat_PoolWater", "#5b9bd5", roughness=0.1, is_water=True),
+        "water": create_pbr_material("Mat_Water", "#5b9bd5", roughness=0.1, is_water=True),
         "asphalt_paver": create_pbr_material("Mat_Asphalt", "#2b2b2b", roughness=0.85),
+        "pavers": create_pbr_material("Mat_Pavers", "#8c8c8c", roughness=0.8),
         "concrete_slab": create_pbr_material("Mat_ConcreteSlab", "#d4d4d4", roughness=0.7),
         "gravel": create_pbr_material("Mat_GraniteGravel", "#9ca3af", roughness=0.9),
         "foliage_pine": create_pbr_material("Mat_FoliagePine", "#1a4329", roughness=0.7),
@@ -359,24 +361,48 @@ def build_polygon_slab(name, polygon, z_level, thickness, material):
     return obj
 
 
-def setup_lighting_and_camera(bounds_center=(0, 0, 0), scene_radius=15.0):
+def setup_lighting_and_camera(bounds_center=(0, 0, 0), scene_radius=18.0):
     """Sets up realistic sunlight, ambient sky, and isometric presentation camera."""
+    # 0. World Environment Sky Lighting
+    world = bpy.context.scene.world
+    if not world:
+        world = bpy.data.worlds.new("ArchVizWorld")
+        bpy.context.scene.world = world
+    world.use_nodes = True
+    bg_node = world.node_tree.nodes.get("Background")
+    if bg_node:
+        bg_node.inputs['Color'].default_value = (0.75, 0.85, 0.98, 1.0) # Soft blue sky
+        bg_node.inputs['Strength'].default_value = 1.5
+
     # 1. Sun Light
     sun_data = bpy.data.lights.new(name="SunLight", type='SUN')
-    sun_data.energy = 4.5
-    sun_data.color = (1.0, 0.96, 0.90)
+    sun_data.energy = 6.5
+    sun_data.color = (1.0, 0.97, 0.92)
+    sun_data.angle = math.radians(2.0)
     sun_obj = bpy.data.objects.new("Sun", sun_data)
-    sun_obj.location = (bounds_center[0] + 15, bounds_center[1] - 15, 25)
-    sun_obj.rotation_euler = (math.radians(50), math.radians(15), math.radians(45))
+    sun_obj.location = (bounds_center[0] + 20, bounds_center[1] - 25, 30)
+    sun_obj.rotation_euler = (math.radians(50), math.radians(20), math.radians(35))
     bpy.context.collection.objects.link(sun_obj)
 
-    # 2. Camera (3/4 ArchViz perspective view)
+    # 2. Camera with precise Look-At Target
+    target = bpy.data.objects.new("CamTarget", None)
+    target.location = (bounds_center[0], bounds_center[1], bounds_center[2] + 1.2)
+    bpy.context.collection.objects.link(target)
+
     cam_data = bpy.data.cameras.new(name="ArchVizCam")
-    cam_data.lens = 50
+    cam_data.lens = 45
+    cam_data.clip_start = 0.1
+    cam_data.clip_end = 500
     cam_obj = bpy.data.objects.new("Camera", cam_data)
-    cam_dist = scene_radius * 2.2
-    cam_obj.location = (bounds_center[0] - cam_dist * 0.7, bounds_center[1] - cam_dist * 0.7, cam_dist * 0.65)
-    cam_obj.rotation_euler = (math.radians(60), 0, math.radians(-45))
+    
+    # Position camera at front-south 3/4 perspective
+    cam_obj.location = (bounds_center[0] - scene_radius * 0.3, bounds_center[1] - scene_radius * 1.4, bounds_center[2] + scene_radius * 1.1)
+    
+    track = cam_obj.constraints.new(type='TRACK_TO')
+    track.target = target
+    track.track_axis = 'TRACK_NEGATIVE_Z'
+    track.up_axis = 'UP_Y'
+
     bpy.context.collection.objects.link(cam_obj)
     bpy.context.scene.camera = cam_obj
 
@@ -505,10 +531,14 @@ def assemble_scene_from_json(json_path, output_glb_path, render_image_path=None)
     clear_scene()
     materials = setup_materials_catalog()
 
-    # 1. Build Site Elements (Lawn, Pool, Parking, Decking Slabs)
-    for elem in data.get('siteElements', []):
+    # 1. Build Site Elements & Paving Zones
+    site_elems = data.get('siteElements', [])
+    paving_zones = data.get('pavingZones', [])
+    all_ground_elems = list(site_elems) + list(paving_zones)
+
+    for elem in all_ground_elems:
         mat_key = elem.get('material', 'concrete_slab')
-        if 'dpk' in mat_key or 'decking' in elem.get('type', ''):
+        if 'dpk' in mat_key or 'decking' in elem.get('type', '') or 'wood' in mat_key:
             mat_key = 'dpk_decking'
         elif 'gravel' in mat_key:
             mat_key = 'gravel'
@@ -517,52 +547,102 @@ def assemble_scene_from_json(json_path, output_glb_path, render_image_path=None)
         
         mat = materials.get(mat_key, materials['concrete_slab'])
         poly = elem.get('polygon', [])
-        thickness = 1.5 if elem.get('type') == 'water' else 0.1
-        z_pos = -0.05 if elem.get('type') == 'ground' else 0.0
-        build_polygon_slab(f"Site_{elem.get('id')}", poly, z_pos, thickness, mat)
+        if len(poly) >= 3:
+            thickness = 1.5 if elem.get('type') == 'water' else 0.1
+            z_pos = -0.05 if elem.get('type') == 'ground' else 0.0
+            build_polygon_slab(f"Site_{elem.get('id', 'slab')}", poly, z_pos, thickness, mat)
+
+    # 1.1 Build MAF Elements (Pools, Hot Tubs, Pergolas, BBQ)
+    for maf in data.get('mafElements', []):
+        pos = maf.get('position', [0, 0])
+        dims = maf.get('dimensions', [4, 4])
+        px, py = float(pos[0]), float(pos[1])
+        w, d = float(dims[0]), float(dims[1])
+        poly = [[px, py], [px + w, py], [px + w, py + d], [px, py + d]]
+        m_type = maf.get('type', 'generic')
+        if m_type == 'pool':
+            build_polygon_slab(f"MAF_{maf.get('id')}", poly, 0.0, 1.5, materials['water'])
+        else:
+            build_polygon_slab(f"MAF_{maf.get('id')}", poly, 0.0, 0.4, materials['concrete_slab'])
 
     # 2. Build Buildings
     for bldg in data.get('buildings', []):
         facade_mat_key = bldg.get('facadeMaterial', 'white_plaster')
         facade_mat = materials.get(facade_mat_key, materials['white_plaster'])
+        walls = bldg.get('walls', [])
 
-        # Walls & Openings
-        wall_objs = {}
-        for w_data in bldg.get('walls', []):
-            wall_obj = build_wall_mesh(w_data, facade_mat)
-            if wall_obj:
-                wall_objs[w_data.get('id')] = (wall_obj, w_data)
+        if walls:
+            # Walls & Openings
+            wall_objs = {}
+            for w_data in walls:
+                wall_obj = build_wall_mesh(w_data, facade_mat)
+                if wall_obj:
+                    wall_objs[w_data.get('id')] = (wall_obj, w_data)
 
-        for op_data in bldg.get('openings', []):
-            wall_id = op_data.get('wallId')
-            if wall_id in wall_objs:
-                w_obj, w_data = wall_objs[wall_id]
-                cut_opening_in_wall(w_obj, w_data, op_data, materials)
+            for op_data in bldg.get('openings', []):
+                wall_id = op_data.get('wallId')
+                if wall_id in wall_objs:
+                    w_obj, w_data = wall_objs[wall_id]
+                    cut_opening_in_wall(w_obj, w_data, op_data, materials)
 
-        # Columns
-        for col_data in bldg.get('columns', []):
-            col_mat_key = col_data.get('material', 'dark_wood')
-            col_mat = materials.get(col_mat_key, materials['dark_wood'])
-            build_column(col_data, col_mat)
+            # Columns
+            for col_data in bldg.get('columns', []):
+                col_mat_key = col_data.get('material', 'dark_wood')
+                col_mat = materials.get(col_mat_key, materials['dark_wood'])
+                build_column(col_data, col_mat)
 
-        # Rooms / Floors
-        for room in bldg.get('rooms', []):
-            fl_mat_key = room.get('floorMaterial', 'parquet')
-            fl_mat = materials.get(fl_mat_key, materials['parquet'])
-            poly = room.get('polygon', [])
-            build_polygon_slab(f"Floor_{room.get('id')}", poly, 0.01, 0.05, fl_mat)
+            # Rooms / Floors
+            for room in bldg.get('rooms', []):
+                fl_mat_key = room.get('floorMaterial', 'parquet')
+                fl_mat = materials.get(fl_mat_key, materials['parquet'])
+                poly = room.get('polygon', [])
+                build_polygon_slab(f"Floor_{room.get('id')}", poly, 0.01, 0.05, fl_mat)
 
-        # Roof
-        roof_mat_key = bldg.get('roof', {}).get('material', 'charcoal_tile')
-        roof_mat = materials.get(roof_mat_key, materials['charcoal_tile'])
-        build_gable_roof(bldg, roof_mat)
+            # Roof
+            roof_mat_key = bldg.get('roof', {}).get('material', 'charcoal_tile') if isinstance(bldg.get('roof'), dict) else 'charcoal_tile'
+            roof_mat = materials.get(roof_mat_key, materials['charcoal_tile'])
+            build_gable_roof(bldg, roof_mat)
+        else:
+            # Solid Polygonal Building
+            b_poly = bldg.get('polygon', [])
+            if not b_poly and 'origin' in bldg and 'dimensions' in bldg:
+                ox, oy = float(bldg['origin'][0]), float(bldg['origin'][1])
+                bw, bd = float(bldg['dimensions'][0]), float(bldg['dimensions'][1])
+                b_poly = [[ox, oy], [ox + bw, oy], [ox + bw, oy + bd], [ox, oy + bd]]
+            
+            if len(b_poly) >= 3:
+                b_height = float(bldg.get('height', 3.0))
+                build_polygon_slab(f"Building_{bldg.get('id')}", b_poly, 0.0, b_height, facade_mat)
 
     # 3. Build Procedural Plants (Trees, Shrubs, Perennials)
     for plant_data in data.get('plants', []):
         build_procedural_tree(plant_data, materials)
 
-    # 3. Environment & Lighting
-    setup_lighting_and_camera()
+    # 3.1 Calculate True Dynamic Bounding Box from Geometry Vertices
+    import mathutils
+    all_meshes = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+    if all_meshes:
+        xs, ys, zs = [], [], []
+        for obj in all_meshes:
+            for v in obj.bound_box:
+                world_v = obj.matrix_world @ mathutils.Vector(v)
+                xs.append(world_v.x)
+                ys.append(world_v.y)
+                zs.append(world_v.z)
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        min_z, max_z = min(zs), max(zs)
+        cx = (min_x + max_x) / 2.0
+        cy = (min_y + max_y) / 2.0
+        cz = (min_z + max_z) / 2.0
+        radius = max(max_x - min_x, max_y - min_y, 18.0)
+        bounds_center = (cx, cy, cz)
+    else:
+        bounds_center = (0.0, 0.0, 0.0)
+        radius = 25.0
+
+    # 3.2 Environment & Lighting
+    setup_lighting_and_camera(bounds_center=bounds_center, scene_radius=radius)
 
     # 4. Export GLB
     print(f"📦 [Blender] Exporting GLB 3D scene to: {output_glb_path}")
