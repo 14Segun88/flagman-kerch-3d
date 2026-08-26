@@ -590,7 +590,7 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
       window_glass: new THREE.MeshStandardMaterial({ color: 0x88c0d0, roughness: 0.1, transparent: true, opacity: 0.5 }),
     };
 
-    // 1. Build Site Elements
+    // 1. Build Site Elements (Lawn, Terraces, Paths, Firepit, Driveway)
     for (const elem of projectData.siteElements || []) {
       const poly = elem.polygon || [];
       if (poly.length < 3 || !poly[0] || poly[0].length < 2) continue;
@@ -604,21 +604,23 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
       }
       shape.closePath();
 
-      const geom = new THREE.ExtrudeGeometry(shape, { depth: 0.1, bevelEnabled: false });
-      const mat = mats[elem.material] || mats.grass_lawn;
+      const isDecking = elem.type === 'decking' || elem.id.includes('terrace');
+      const depth = isDecking ? 0.18 : 0.08;
+      const geom = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+      const mat = isDecking ? mats.wood_timber : (mats[elem.material] || mats.grass_lawn);
       const mesh = new THREE.Mesh(geom, mat);
       mesh.rotation.x = Math.PI / 2;
-      mesh.position.y = elem.type === 'ground' ? -0.05 : 0;
+      mesh.position.y = elem.type === 'ground' ? -0.05 : (isDecking ? 0.1 : 0.01);
       mesh.receiveShadow = true;
       rootGroup.add(mesh);
     }
 
-    // 2. Build Buildings (Walls, Columns & Roofs)
+    // 2. Build Buildings (Walls, Columns, Glass Doors & Roofs)
     for (const bldg of projectData.buildings || []) {
       const bldgMat = mats[bldg.facadeMaterial] || mats.white_plaster;
       const bHeight = bldg.wallHeight || 3.0;
 
-      // Walls
+      // Solid Walls
       for (const w of bldg.walls || []) {
         if (!w || !w.start || !w.end) continue;
         const [x1, y1] = w.start;
@@ -640,7 +642,26 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
         rootGroup.add(wallMesh);
       }
 
-      // Columns (e.g. Carport / Pergola / Gazebo)
+      // Windows & Glass Sliding Doors
+      for (const op of bldg.openings || []) {
+        if (op.type === 'window' && op.label?.includes('Стеклянные')) {
+          // Render glass sliding panel
+          const glassGeom = new THREE.BoxGeometry(op.width || 3.0, op.height || 2.5, 0.08);
+          const glassMesh = new THREE.Mesh(glassGeom, mats.window_glass);
+          // Distribute along south wall
+          const gx = -12.0 + (op.positionFromStart || 2.5);
+          glassMesh.position.set(gx, (op.height || 2.5) / 2, -3.5);
+          rootGroup.add(glassMesh);
+
+          // Frame
+          const frameGeom = new THREE.BoxGeometry((op.width || 3.0) + 0.1, (op.height || 2.5) + 0.1, 0.04);
+          const frameMesh = new THREE.Mesh(frameGeom, mats.dark_wood);
+          frameMesh.position.set(gx, (op.height || 2.5) / 2, -3.5);
+          rootGroup.add(frameMesh);
+        }
+      }
+
+      // Columns (Carport / Pergola posts)
       for (const col of (bldg as any).columns || []) {
         const [cx, cy] = col.position || [0, 0];
         const colH = col.height || bHeight;
@@ -671,9 +692,9 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
         rootGroup.add(fMesh);
       }
 
-      // Roof (Parametric Gable / Dome / Hip / Flat)
+      // Roof
       const validWalls = (bldg.walls || []).filter((w) => w && w.start && w.end);
-      if (bldg.roof && validWalls.length > 0) {
+      if (bldg.roof && validWalls.length > 0 && bldg.id !== 'carport') {
         const xs = validWalls.flatMap((w) => [w.start[0], w.end[0]]);
         const ys = validWalls.flatMap((w) => [w.start[1], w.end[1]]);
         const overhang = bldg.roof.overhang || 0.4;
@@ -685,49 +706,163 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
         const w = maxX - minX;
         const d = maxY - minY;
 
-        if (bldg.roof.type === 'dome' || bldg.type === 'dome') {
-          const domeRadius = Math.max(w, d) / 2;
-          const domeGeom = new THREE.SphereGeometry(domeRadius, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-          const domeMesh = new THREE.Mesh(domeGeom, mats.wood_timber);
-          domeMesh.position.set((minX + maxX) / 2, bHeight, (minY + maxY) / 2);
-          domeMesh.castShadow = true;
-          roofGroup.add(domeMesh);
-        } else {
-          const ridgeH = (Math.min(w, d) / 2) * Math.tan((bldg.roof.slopeDeg || 25) * (Math.PI / 180));
+        const ridgeH = (Math.min(w, d) / 2) * Math.tan((bldg.roof.slopeDeg || 18) * (Math.PI / 180));
+        const roofGeom = new THREE.BufferGeometry();
+        const midY = (minY + maxY) / 2;
+        const bz = bHeight;
+        const rz = bHeight + ridgeH;
 
-          // Gable geometry
-          const roofGeom = new THREE.BufferGeometry();
-          const midY = (minY + maxY) / 2;
-          const bz = bHeight;
-          const rz = bHeight + ridgeH;
+        const verts = new Float32Array([
+          minX, bz, minY,   maxX, bz, minY,   maxX, rz, midY,
+          minX, bz, minY,   maxX, rz, midY,   minX, rz, midY,
+          minX, rz, midY,   maxX, rz, midY,   maxX, bz, maxY,
+          minX, rz, midY,   maxX, bz, maxY,   minX, bz, maxY,
+          minX, bz, minY,   minX, rz, midY,   minX, bz, maxY,
+          maxX, bz, minY,   maxX, bz, maxY,   maxX, rz, midY,
+        ]);
+        roofGeom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        roofGeom.computeVertexNormals();
 
-          const verts = new Float32Array([
-            // Pitch 1
-            minX, bz, minY,   maxX, bz, minY,   maxX, rz, midY,
-            minX, bz, minY,   maxX, rz, midY,   minX, rz, midY,
-            // Pitch 2
-            minX, rz, midY,   maxX, rz, midY,   maxX, bz, maxY,
-            minX, rz, midY,   maxX, bz, maxY,   minX, bz, maxY,
-            // Gables
-            minX, bz, minY,   minX, rz, midY,   minX, bz, maxY,
-            maxX, bz, minY,   maxX, bz, maxY,   maxX, rz, midY,
-          ]);
-          roofGeom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-          roofGeom.computeVertexNormals();
-
-          const roofMesh = new THREE.Mesh(roofGeom, mats.charcoal_tile);
-          roofMesh.castShadow = true;
-          roofGroup.add(roofMesh);
-        }
+        const roofMesh = new THREE.Mesh(roofGeom, mats.charcoal_tile);
+        roofMesh.castShadow = true;
+        roofGroup.add(roofMesh);
       }
     }
+
+    // 3. Build Carport Canopy & 2 Parked Cars
+    const cpColMat = mats.dark_wood;
+    const cpPosts = [
+      [6.0, 3.5], [12.0, 3.5], [12.0, 9.5], [6.0, 9.5]
+    ];
+    for (const [px, py] of cpPosts) {
+      const pGeom = new THREE.BoxGeometry(0.2, 2.7, 0.2);
+      const pMesh = new THREE.Mesh(pGeom, cpColMat);
+      pMesh.position.set(px, 1.35, py);
+      pMesh.castShadow = true;
+      rootGroup.add(pMesh);
+    }
+    // Carport Canopy Roof
+    const cpRoofGeom = new THREE.BoxGeometry(6.4, 0.1, 6.4);
+    const cpRoofMat = mats.dark_wood;
+    const cpRoofMesh = new THREE.Mesh(cpRoofGeom, cpRoofMat);
+    cpRoofMesh.position.set(9.0, 2.75, 6.5);
+    roofGroup.add(cpRoofMesh);
+
+    // 2 Minimalist Sedans under Carport
+    const carColors = [0x334155, 0xd97706];
+    const carZOffsets = [5.0, 8.0];
+    for (let c = 0; c < 2; c++) {
+      const carGroup = new THREE.Group();
+      // Body
+      const bodyGeom = new THREE.BoxGeometry(4.2, 0.8, 1.8);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: carColors[c], roughness: 0.3, metalness: 0.6 });
+      const bodyMesh = new THREE.Mesh(bodyGeom, bodyMat);
+      bodyMesh.position.set(0, 0.5, 0);
+      bodyMesh.castShadow = true;
+      carGroup.add(bodyMesh);
+      // Cabin
+      const cabinGeom = new THREE.BoxGeometry(2.2, 0.6, 1.6);
+      const cabinMat = mats.window_glass;
+      const cabinMesh = new THREE.Mesh(cabinGeom, cabinMat);
+      cabinMesh.position.set(-0.2, 1.1, 0);
+      carGroup.add(cabinMesh);
+
+      carGroup.position.set(9.0, 0, carZOffsets[c]);
+      rootGroup.add(carGroup);
+    }
+
+    // 4. Summer BBQ Terrace Pergola Beams
+    for (let b = 0; b < 6; b++) {
+      const bGeom = new THREE.BoxGeometry(0.12, 0.2, 5.2);
+      const bMesh = new THREE.Mesh(bGeom, mats.wood_timber);
+      bMesh.position.set(2.8 + (b * 0.9), 2.7, -1.0);
+      bMesh.castShadow = true;
+      roofGroup.add(bMesh);
+    }
+
+    // 5. Fire Pit Circle & Flames
+    const fpCircleGeom = new THREE.CylinderGeometry(1.8, 1.8, 0.1, 24);
+    const fpCircleMesh = new THREE.Mesh(fpCircleGeom, mats.asphalt_paver);
+    fpCircleMesh.position.set(-9.0, 0.05, -9.0);
+    rootGroup.add(fpCircleMesh);
+
+    const fpBowlGeom = new THREE.CylinderGeometry(0.6, 0.4, 0.3, 16);
+    const fpBowlMat = mats.dark_wood;
+    const fpBowlMesh = new THREE.Mesh(fpBowlGeom, fpBowlMat);
+    fpBowlMesh.position.set(-9.0, 0.2, -9.0);
+    rootGroup.add(fpBowlMesh);
+
+    const fireLight = new THREE.PointLight(0xff7700, 2.0, 8);
+    fireLight.position.set(-9.0, 0.5, -9.0);
+    rootGroup.add(fireLight);
+
+    // 6. Dendrology: 3D Procedural Trees & Hedges
+    // East Fence Windbreak Hedges (Tuya Smaragd)
+    const tuyaMat = new THREE.MeshStandardMaterial({ color: 0x1e4620, roughness: 0.8 });
+    for (let tz = -10.0; tz <= 10.0; tz += 1.8) {
+      const tGeom = new THREE.ConeGeometry(0.55, 3.2, 8);
+      const tMesh = new THREE.Mesh(tGeom, tuyaMat);
+      tMesh.position.set(14.5, 1.6, tz);
+      tMesh.castShadow = true;
+      rootGroup.add(tMesh);
+    }
+
+    // Red Barberry & Yellow-Green Dogwood Shrub Clumps
+    const barberryMat = new THREE.MeshStandardMaterial({ color: 0x881337, roughness: 0.85 });
+    const dogwoodMat = new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.85 });
+    const shrubCoords = [
+      [13.2, -8.0, barberryMat], [13.2, -4.5, dogwoodMat], [13.2, -1.0, barberryMat],
+      [13.2, 2.5, dogwoodMat], [13.2, 6.0, barberryMat], [13.2, 9.5, dogwoodMat],
+      [-13.5, -7.0, dogwoodMat], [-13.5, -9.0, barberryMat], [-6.0, -10.5, dogwoodMat]
+    ];
+    for (const [sx, sz, sMat] of shrubCoords as any) {
+      const sGeom = new THREE.SphereGeometry(0.65, 8, 6);
+      const sMesh = new THREE.Mesh(sGeom, sMat);
+      sMesh.scale.set(1.0, 0.8, 1.0);
+      sMesh.position.set(sx, 0.5, sz);
+      sMesh.castShadow = true;
+      rootGroup.add(sMesh);
+    }
+
+    // Crimean Pines (Сосна Нана)
+    const pineMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.9 });
+    const pineTrunkMat = mats.dark_wood;
+    const pinePositions = [[-13.5, -4.0], [-13.5, 3.0], [-13.5, 8.5], [3.5, 9.5]];
+    for (const [px, pz] of pinePositions) {
+      // Trunk
+      const trGeom = new THREE.CylinderGeometry(0.12, 0.15, 1.2, 6);
+      const trMesh = new THREE.Mesh(trGeom, pineTrunkMat);
+      trMesh.position.set(px, 0.6, pz);
+      rootGroup.add(trMesh);
+      // Crown
+      const crGeom = new THREE.SphereGeometry(1.2, 10, 8);
+      const crMesh = new THREE.Mesh(crGeom, pineMat);
+      crMesh.scale.set(1.2, 0.7, 1.2);
+      crMesh.position.set(px, 1.8, pz);
+      crMesh.castShadow = true;
+      rootGroup.add(crMesh);
+    }
+
+    // Lavender Clumps
+    const lavMat = new THREE.MeshStandardMaterial({ color: 0x7c3aed, roughness: 0.8 });
+    for (let lz = -4.0; lz <= 0.0; lz += 0.9) {
+      const lavGeom = new THREE.SphereGeometry(0.35, 6, 5);
+      const lavMesh = new THREE.Mesh(lavGeom, lavMat);
+      lavMesh.scale.set(1.0, 0.5, 1.0);
+      lavMesh.position.set(-1.2, 0.2, lz);
+      rootGroup.add(lavMesh);
+    }
+
+    // Set initial camera to center the entire 32x25m estate
+    camera.position.set(0, 24, 28);
+    camera.lookAt(0, 0, 0);
 
     // Interactive Drag & Orbit
     let isDragging = false;
     let prevMousePos = { x: 0, y: 0 };
-    let rotY = -0.6;
-    let rotX = 0.5;
-    let zoom = 28;
+    let rotY = -0.4;
+    let rotX = 0.55;
+    let zoom = 32;
 
     const onMouseDown = (e: MouseEvent) => {
       isDragging = true;
