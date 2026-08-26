@@ -592,13 +592,15 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
 
     // 1. Build Site Elements
     for (const elem of projectData.siteElements || []) {
-      const poly = elem.polygon;
-      if (poly.length < 3) continue;
+      const poly = elem.polygon || [];
+      if (poly.length < 3 || !poly[0] || poly[0].length < 2) continue;
 
       const shape = new THREE.Shape();
       shape.moveTo(poly[0][0], poly[0][1]);
       for (let i = 1; i < poly.length; i++) {
-        shape.lineTo(poly[i][0], poly[i][1]);
+        if (poly[i] && poly[i].length >= 2) {
+          shape.lineTo(poly[i][0], poly[i][1]);
+        }
       }
       shape.closePath();
 
@@ -611,13 +613,14 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
       rootGroup.add(mesh);
     }
 
-    // 2. Build Buildings (Walls & Roofs)
-    for (const bldg of projectData.buildings) {
+    // 2. Build Buildings (Walls, Columns & Roofs)
+    for (const bldg of projectData.buildings || []) {
       const bldgMat = mats[bldg.facadeMaterial] || mats.white_plaster;
       const bHeight = bldg.wallHeight || 3.0;
 
       // Walls
-      for (const w of bldg.walls) {
+      for (const w of bldg.walls || []) {
+        if (!w || !w.start || !w.end) continue;
         const [x1, y1] = w.start;
         const [x2, y2] = w.end;
         const dx = x2 - x1;
@@ -637,9 +640,20 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
         rootGroup.add(wallMesh);
       }
 
+      // Columns (e.g. Carport / Pergola / Gazebo)
+      for (const col of (bldg as any).columns || []) {
+        const [cx, cy] = col.position || [0, 0];
+        const colH = col.height || bHeight;
+        const colGeom = new THREE.BoxGeometry(col.width || 0.25, colH, col.depth || 0.25);
+        const colMesh = new THREE.Mesh(colGeom, mats.wood_timber);
+        colMesh.position.set(cx, colH / 2, cy);
+        colMesh.castShadow = true;
+        rootGroup.add(colMesh);
+      }
+
       // Floors
       for (const room of bldg.rooms || []) {
-        const poly = room.polygon;
+        const poly = room.polygon || [];
         if (poly.length < 3) continue;
         const shape = new THREE.Shape();
         shape.moveTo(poly[0][0], poly[0][1]);
@@ -657,10 +671,11 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
         rootGroup.add(fMesh);
       }
 
-      // Roof (Parametric Gable / Dome / Hip)
-      if (bldg.roof && bldg.walls.length > 0) {
-        const xs = bldg.walls.flatMap((w) => [w.start[0], w.end[0]]);
-        const ys = bldg.walls.flatMap((w) => [w.start[1], w.end[1]]);
+      // Roof (Parametric Gable / Dome / Hip / Flat)
+      const validWalls = (bldg.walls || []).filter((w) => w && w.start && w.end);
+      if (bldg.roof && validWalls.length > 0) {
+        const xs = validWalls.flatMap((w) => [w.start[0], w.end[0]]);
+        const ys = validWalls.flatMap((w) => [w.start[1], w.end[1]]);
         const overhang = bldg.roof.overhang || 0.4;
         const minX = Math.min(...xs) - overhang;
         const maxX = Math.max(...xs) + overhang;
