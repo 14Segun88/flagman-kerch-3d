@@ -261,6 +261,8 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
   // Result Data
   const [projectData, setProjectData] = useState<VectorizedProjectData | null>(null);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
+  const [blenderPreviewUrl, setBlenderPreviewUrl] = useState<string | null>('/generated_preview.png');
+  const [previewMode, setPreviewMode] = useState<'blender_render' | 'webgl'>('blender_render');
 
   // 3D Canvas Ref
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -362,6 +364,10 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
 
       if (response.ok) {
         const jsonRes = await response.json();
+        if (jsonRes.previewUrl) {
+          setBlenderPreviewUrl(jsonRes.previewUrl);
+          setPreviewMode('blender_render');
+        }
         if (jsonRes.success && jsonRes.data && jsonRes.data.buildings?.length > 0) {
           data = jsonRes.data;
         } else {
@@ -1308,30 +1314,68 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
                 {/* 3D Viewport Column */}
                 <div className="lg:col-span-6 flex flex-col space-y-3">
                   <div className="relative w-full h-[380px] rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 shadow-2xl">
-                    <div ref={canvasContainerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+                    {previewMode === 'blender_render' && blenderPreviewUrl ? (
+                      <div className="relative w-full h-full flex items-center justify-center bg-slate-950">
+                        <img
+                          src={blenderPreviewUrl}
+                          alt="Blender 4.2 Cycles Render"
+                          className="w-full h-full object-cover rounded-2xl"
+                        />
+                        <div className="absolute top-3 left-3 flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-amber-500/40 text-[11px] font-bold text-amber-400 backdrop-blur-md flex items-center gap-1.5 shadow-lg">
+                            <span>🧡</span> Рендер из локального Blender 4.2 (Cycles)
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div ref={canvasContainerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+                        <div className="absolute top-3 left-3 flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-900/85 border border-slate-700/80 text-[11px] font-bold text-emerald-400 backdrop-blur-md">
+                            🎮 Интерактивный 3D WebGL (Вращайте)
+                          </span>
+                        </div>
+                      </>
+                    )}
 
-                    <div className="absolute top-3 left-3 flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-900/85 border border-slate-700/80 text-[11px] font-bold text-amber-400 backdrop-blur-md">
-                        🎮 Интерактивный 3D WebGL (Вращайте)
-                      </span>
-                    </div>
-
+                    {/* Mode Toggle & Roof Controls */}
                     <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                      <button
-                        onClick={() => setShowRoofIn3D(!showRoofIn3D)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-md backdrop-blur-md ${
-                          showRoofIn3D
-                            ? 'bg-slate-900/90 border-slate-700 text-white'
-                            : 'bg-amber-500 text-slate-950 border-amber-400'
-                        }`}
-                      >
-                        <Layers className="w-3.5 h-3.5" />
-                        <span>{showRoofIn3D ? 'Снять крышу' : 'Показать крышу'}</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80 backdrop-blur-md">
+                        <button
+                          onClick={() => setPreviewMode('blender_render')}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                            previewMode === 'blender_render'
+                              ? 'bg-amber-500 text-slate-950 shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          📸 Blender Рендер
+                        </button>
+                        <button
+                          onClick={() => setPreviewMode('webgl')}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                            previewMode === 'webgl'
+                              ? 'bg-emerald-500 text-slate-950 shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          🎮 3D WebGL
+                        </button>
+                      </div>
 
-                      <span className="text-[10px] text-slate-400 bg-slate-950/70 px-2 py-1 rounded-md border border-slate-800">
-                        Колёсико: Масштаб
-                      </span>
+                      {previewMode === 'webgl' && (
+                        <button
+                          onClick={() => setShowRoofIn3D(!showRoofIn3D)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1.5 shadow-md backdrop-blur-md cursor-pointer ${
+                            showRoofIn3D
+                              ? 'bg-slate-900/90 border-slate-700 text-white'
+                              : 'bg-amber-500 text-slate-950 border-amber-400'
+                          }`}
+                        >
+                          <Layers className="w-3 h-3" />
+                          <span>{showRoofIn3D ? 'Снять крышу' : 'Крыша'}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 

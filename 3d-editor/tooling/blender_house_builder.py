@@ -581,12 +581,18 @@ def assemble_scene_from_json(json_path, output_glb_path, render_image_path=None)
     # 5. Optional Photorealistic Render
     if render_image_path:
         print(f"📸 [Blender] Rendering high-res still image to: {render_image_path}")
-        bpy.context.scene.render.image_settings.file_format = 'PNG'
-        bpy.context.scene.render.filepath = render_image_path
-        bpy.context.scene.render.resolution_x = 1920
-        bpy.context.scene.render.resolution_y = 1080
-        bpy.ops.render.render(write_still=True)
-        print("✅ [Blender] Render image saved!")
+        try:
+            bpy.context.scene.render.engine = 'CYCLES'
+            bpy.context.scene.cycles.device = 'CPU'
+            bpy.context.scene.cycles.samples = 32
+            bpy.context.scene.render.image_settings.file_format = 'PNG'
+            bpy.context.scene.render.filepath = render_image_path
+            bpy.context.scene.render.resolution_x = 1280
+            bpy.context.scene.render.resolution_y = 720
+            bpy.ops.render.render(write_still=True)
+            print("✅ [Blender] Render image saved!")
+        except Exception as e:
+            print(f"⚠️ [Blender] Headless render skipped: {e}")
 
 
 def parse_args():

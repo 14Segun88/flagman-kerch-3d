@@ -228,7 +228,42 @@ export async function POST(req: Request) {
     }
 
     const parsedData = JSON.parse(rawText)
-    return NextResponse.json({ success: true, data: parsedData, model: modelName })
+
+    // Execute local Blender builder on user PC
+    const rootDir = path.resolve(process.cwd(), '../..')
+    const outDir = path.join(rootDir, 'output_album_test')
+    if (!fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true })
+    }
+    const sceneJsonPath = path.join(outDir, 'last_extracted_scene.json')
+    fs.writeFileSync(sceneJsonPath, JSON.stringify(parsedData, null, 2))
+
+    const publicDir = path.join(rootDir, 'public')
+    const outGlb = path.join(publicDir, 'generated_villa.glb')
+    const outRender = path.join(publicDir, 'generated_preview.png')
+    const builderScript = path.join(rootDir, '3d-editor/tooling/blender_house_builder.py')
+    const blenderBin = path.join(process.env.HOME || '/home/segun', '.local/bin/blender')
+
+    console.log(`🔨 [Blender Local Engine] Building 3D scene: ${outGlb}`)
+    try {
+      const { spawnSync } = await import('node:child_process')
+      spawnSync(
+        blenderBin,
+        ['--background', '--python', builderScript, '--', '--input', sceneJsonPath, '--output', outGlb, '--render', outRender],
+        { cwd: rootDir, timeout: 35000 }
+      )
+    } catch (bErr) {
+      console.warn('Blender background execution warning:', bErr)
+    }
+
+    const timestamp = Date.now()
+    return NextResponse.json({
+      success: true,
+      data: parsedData,
+      previewUrl: `/generated_preview.png?t=${timestamp}`,
+      glbUrl: `/generated_villa.glb?t=${timestamp}`,
+      model: modelName
+    })
   } catch (error: any) {
     console.error('❌ [Gemini Vision Exception]:', error)
     return NextResponse.json({ success: false, error: error.message || 'Internal error' }, { status: 500 })
