@@ -41,6 +41,14 @@ def build_scene_from_dynamic_json(json_data: Dict[str, Any], address: str, facts
     proj_meta = json_data.get("project", {})
     proj_title = proj_meta.get("name", "Эскизный проект благоустройства территории")
     
+    # Dynamic Site Boundaries
+    site_dims = proj_meta.get("siteDimensions")
+    if site_dims and len(site_dims) >= 2:
+        sw, sh = float(site_dims[0]), float(site_dims[1])
+        boundary_polygon = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)]
+    else:
+        boundary_polygon = [(0.0, 0.0), (31.25, 0.0), (31.25, 30.0), (0.0, 34.0)]
+
     scene = LandscapeSceneGraph(
         project_id="FL-KERCH-AI-2024",
         project_title=proj_title,
@@ -48,7 +56,7 @@ def build_scene_from_dynamic_json(json_data: Dict[str, Any], address: str, facts
         author="Ландшафтный архитектор Анна (+7 978 066-23-80)",
         year=2024,
         scale="1:200",
-        boundary_polygon=[(0.0, 0.0), (31.25, 0.0), (31.25, 30.0), (0.0, 34.0)],
+        boundary_polygon=boundary_polygon,
         climate_text=(
             f"Микроклимат объекта ({facts['name']}):\n"
             f"• Средняя температура летом: {facts['temp_summer_avg']}, зимой: {facts['temp_winter_avg']}.\n"
@@ -203,18 +211,40 @@ def build_scene_from_dynamic_json(json_data: Dict[str, Any], address: str, facts
         ]
 
     # Plants distribution
-    scene.plants = [
-        PlantNode(id="pl_1", species_ru="Сосна черная «НАНА»", species_lat="Pinus nigra Nana", category="conifer", position=(3.0, 31.0), crown_diameter_m=1.8, symbol_code="СЧ"),
-        PlantNode(id="pl_2", species_ru="Можжевельник Виргинский", species_lat="Juniperus virginiana", category="conifer", position=(7.0, 31.0), crown_diameter_m=1.2, symbol_code="МВ"),
-        PlantNode(id="pl_3", species_ru="Можжевельник Казацкий", species_lat="Juniperus sabina", category="conifer", position=(12.0, 29.0), crown_diameter_m=2.2, symbol_code="МК"),
-        PlantNode(id="pl_4", species_ru="Спирея Вангутта", species_lat="Spiraea vanhouttei", category="deciduous", position=(18.0, 30.0), crown_diameter_m=2.0, symbol_code="СВ"),
-        PlantNode(id="pl_5", species_ru="Клен ясенелистный", species_lat="Acer negundo", category="deciduous", position=(26.0, 28.0), crown_diameter_m=3.0, symbol_code="КЯ"),
-        PlantNode(id="pl_6", species_ru="Лаванда узколистная", species_lat="Lavandula angustifolia", category="perennial", position=(21.0, 22.0), crown_diameter_m=0.8, symbol_code="ЛВ"),
-        PlantNode(id="pl_7", species_ru="Котовник Фассена", species_lat="Nepeta faassenii", category="perennial", position=(14.0, 17.0), crown_diameter_m=0.6, symbol_code="КТ"),
-        PlantNode(id="pl_8", species_ru="Лаванда узколистная", species_lat="Lavandula angustifolia", category="perennial", position=(21.0, 11.0), crown_diameter_m=0.8, symbol_code="ЛВ"),
-        PlantNode(id="pl_9", species_ru="Барбарис Тунберга", species_lat="Berberis thunbergii", category="deciduous", position=(2.0, 5.0), crown_diameter_m=1.2, symbol_code="БТ"),
-        PlantNode(id="pl_10", species_ru="Сирень венгерская", species_lat="Syringa josikaea", category="deciduous", position=(2.0, 10.0), crown_diameter_m=1.8, symbol_code="СВ"),
-    ]
+    raw_plants = json_data.get("plants", [])
+    if raw_plants:
+        scene.plants = []
+        for idx, pl in enumerate(raw_plants, 1):
+            pos = pl.get("position", [5.0, 5.0])
+            s_ru = pl.get("species_ru", pl.get("name", pl.get("species", "Растение")))
+            s_lat = pl.get("species_lat", "")
+            cat = pl.get("category", "conifer")
+            code = pl.get("symbol_code", "Р")
+            crown = float(pl.get("crown_diameter_m", 1.5))
+            scene.plants.append(
+                PlantNode(
+                    id=f"pl_{idx}",
+                    species_ru=s_ru,
+                    species_lat=s_lat,
+                    category=cat,
+                    position=(float(pos[0]), float(pos[1])),
+                    crown_diameter_m=crown,
+                    symbol_code=code,
+                )
+            )
+    else:
+        scene.plants = [
+            PlantNode(id="pl_1", species_ru="Сосна черная «НАНА»", species_lat="Pinus nigra Nana", category="conifer", position=(3.0, 31.0), crown_diameter_m=1.8, symbol_code="СЧ"),
+            PlantNode(id="pl_2", species_ru="Можжевельник Виргинский", species_lat="Juniperus virginiana", category="conifer", position=(7.0, 31.0), crown_diameter_m=1.2, symbol_code="МВ"),
+            PlantNode(id="pl_3", species_ru="Можжевельник Казацкий", species_lat="Juniperus sabina", category="conifer", position=(12.0, 29.0), crown_diameter_m=2.2, symbol_code="МК"),
+            PlantNode(id="pl_4", species_ru="Спирея Вангутта", species_lat="Spiraea vanhouttei", category="deciduous", position=(18.0, 30.0), crown_diameter_m=2.0, symbol_code="СВ"),
+            PlantNode(id="pl_5", species_ru="Клен ясенелистный", species_lat="Acer negundo", category="deciduous", position=(26.0, 28.0), crown_diameter_m=3.0, symbol_code="КЯ"),
+            PlantNode(id="pl_6", species_ru="Лаванда узколистная", species_lat="Lavandula angustifolia", category="perennial", position=(21.0, 22.0), crown_diameter_m=0.8, symbol_code="ЛВ"),
+            PlantNode(id="pl_7", species_ru="Котовник Фассена", species_lat="Nepeta faassenii", category="perennial", position=(14.0, 17.0), crown_diameter_m=0.6, symbol_code="КТ"),
+            PlantNode(id="pl_8", species_ru="Лаванда узколистная", species_lat="Lavandula angustifolia", category="perennial", position=(21.0, 11.0), crown_diameter_m=0.8, symbol_code="ЛВ"),
+            PlantNode(id="pl_9", species_ru="Барбарис Тунберга", species_lat="Berberis thunbergii", category="deciduous", position=(2.0, 5.0), crown_diameter_m=1.2, symbol_code="БТ"),
+            PlantNode(id="pl_10", species_ru="Сирень венгерская", species_lat="Syringa josikaea", category="deciduous", position=(2.0, 10.0), crown_diameter_m=1.8, symbol_code="СВ"),
+        ]
 
     return scene
 
