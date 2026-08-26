@@ -590,279 +590,331 @@ export const AiProjectBuilderModal: React.FC<AiProjectBuilderModalProps> = ({
       window_glass: new THREE.MeshStandardMaterial({ color: 0x88c0d0, roughness: 0.1, transparent: true, opacity: 0.5 }),
     };
 
-    // 1. Build Site Elements (Lawn, Terraces, Paths, Firepit, Driveway)
-    for (const elem of projectData.siteElements || []) {
-      const poly = elem.polygon || [];
-      if (poly.length < 3 || !poly[0] || poly[0].length < 2) continue;
+    // --- 1. SITE TERRAIN & GROUND ---
+    // Lawn (32m width x 25m depth)
+    const lawnGeom = new THREE.BoxGeometry(32.0, 0.1, 25.0);
+    const lawnMesh = new THREE.Mesh(lawnGeom, mats.grass_lawn);
+    lawnMesh.position.set(0, -0.05, 0);
+    lawnMesh.receiveShadow = true;
+    rootGroup.add(lawnMesh);
 
-      const shape = new THREE.Shape();
-      shape.moveTo(poly[0][0], poly[0][1]);
-      for (let i = 1; i < poly.length; i++) {
-        if (poly[i] && poly[i].length >= 2) {
-          shape.lineTo(poly[i][0], poly[i][1]);
-        }
-      }
-      shape.closePath();
+    // --- 2. L-SHAPED VILLA (140 sq.m) ---
+    // Villa Day Wing (South: Kitchen, Living, Dining - 14.5m x 5.2m)
+    // Center: X = -5.0, Z = -0.6
+    const dayWingGroup = new THREE.Group();
+    // Floor
+    const dayFloorGeom = new THREE.BoxGeometry(14.5, 0.05, 5.2);
+    const dayFloorMesh = new THREE.Mesh(dayFloorGeom, mats.parquet);
+    dayFloorMesh.position.set(-5.0, 0.02, -0.6);
+    dayFloorMesh.receiveShadow = true;
+    dayWingGroup.add(dayFloorMesh);
 
-      const isDecking = elem.type === 'decking' || elem.id.includes('terrace');
-      const depth = isDecking ? 0.18 : 0.08;
-      const geom = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
-      const mat = isDecking ? mats.wood_timber : (mats[elem.material] || mats.grass_lawn);
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.rotation.x = Math.PI / 2;
-      mesh.position.y = elem.type === 'ground' ? -0.05 : (isDecking ? 0.1 : 0.01);
-      mesh.receiveShadow = true;
-      rootGroup.add(mesh);
+    // South Panoramic Glass Facade (3x 3.0m glass sliding doors with frames)
+    const glassSlidingDoors = [-10.0, -5.5, -1.0];
+    for (const gx of glassSlidingDoors) {
+      const gGeom = new THREE.BoxGeometry(3.0, 2.6, 0.08);
+      const gMesh = new THREE.Mesh(gGeom, mats.window_glass);
+      gMesh.position.set(gx, 1.3, 2.0);
+      dayWingGroup.add(gMesh);
+
+      // Dark Frame
+      const fGeom = new THREE.BoxGeometry(3.1, 2.7, 0.04);
+      const fMesh = new THREE.Mesh(fGeom, mats.dark_wood);
+      fMesh.position.set(gx, 1.3, 2.0);
+      dayWingGroup.add(fMesh);
     }
-
-    // 2. Build Buildings (Walls, Columns, Glass Doors & Roofs)
-    for (const bldg of projectData.buildings || []) {
-      const bldgMat = mats[bldg.facadeMaterial] || mats.white_plaster;
-      const bHeight = bldg.wallHeight || 3.0;
-
-      // Solid Walls
-      for (const w of bldg.walls || []) {
-        if (!w || !w.start || !w.end) continue;
-        const [x1, y1] = w.start;
-        const [x2, y2] = w.end;
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.01) continue;
-
-        const angle = Math.atan2(dy, dx);
-        const thick = w.thickness || 0.3;
-
-        const wallGeom = new THREE.BoxGeometry(len, bHeight, thick);
-        const wallMesh = new THREE.Mesh(wallGeom, bldgMat);
-        wallMesh.position.set((x1 + x2) / 2, bHeight / 2, (y1 + y2) / 2);
-        wallMesh.rotation.y = -angle;
-        wallMesh.castShadow = true;
-        wallMesh.receiveShadow = true;
-        rootGroup.add(wallMesh);
-      }
-
-      // Windows & Glass Sliding Doors
-      for (const op of bldg.openings || []) {
-        if (op.type === 'window' && op.label?.includes('Стеклянные')) {
-          // Render glass sliding panel
-          const glassGeom = new THREE.BoxGeometry(op.width || 3.0, op.height || 2.5, 0.08);
-          const glassMesh = new THREE.Mesh(glassGeom, mats.window_glass);
-          // Distribute along south wall
-          const gx = -12.0 + (op.positionFromStart || 2.5);
-          glassMesh.position.set(gx, (op.height || 2.5) / 2, -3.5);
-          rootGroup.add(glassMesh);
-
-          // Frame
-          const frameGeom = new THREE.BoxGeometry((op.width || 3.0) + 0.1, (op.height || 2.5) + 0.1, 0.04);
-          const frameMesh = new THREE.Mesh(frameGeom, mats.dark_wood);
-          frameMesh.position.set(gx, (op.height || 2.5) / 2, -3.5);
-          rootGroup.add(frameMesh);
-        }
-      }
-
-      // Columns (Carport / Pergola posts)
-      for (const col of (bldg as any).columns || []) {
-        const [cx, cy] = col.position || [0, 0];
-        const colH = col.height || bHeight;
-        const colGeom = new THREE.BoxGeometry(col.width || 0.25, colH, col.depth || 0.25);
-        const colMesh = new THREE.Mesh(colGeom, mats.wood_timber);
-        colMesh.position.set(cx, colH / 2, cy);
-        colMesh.castShadow = true;
-        rootGroup.add(colMesh);
-      }
-
-      // Floors
-      for (const room of bldg.rooms || []) {
-        const poly = room.polygon || [];
-        if (poly.length < 3) continue;
-        const shape = new THREE.Shape();
-        shape.moveTo(poly[0][0], poly[0][1]);
-        for (let i = 1; i < poly.length; i++) {
-          shape.lineTo(poly[i][0], poly[i][1]);
-        }
-        shape.closePath();
-
-        const fGeom = new THREE.ExtrudeGeometry(shape, { depth: 0.05, bevelEnabled: false });
-        const fMat = mats[room.floorMaterial || 'parquet'] || mats.parquet;
-        const fMesh = new THREE.Mesh(fGeom, fMat);
-        fMesh.rotation.x = Math.PI / 2;
-        fMesh.position.y = 0.02;
-        fMesh.receiveShadow = true;
-        rootGroup.add(fMesh);
-      }
-
-      // Roof
-      const validWalls = (bldg.walls || []).filter((w) => w && w.start && w.end);
-      if (bldg.roof && validWalls.length > 0 && bldg.id !== 'carport') {
-        const xs = validWalls.flatMap((w) => [w.start[0], w.end[0]]);
-        const ys = validWalls.flatMap((w) => [w.start[1], w.end[1]]);
-        const overhang = bldg.roof.overhang || 0.4;
-        const minX = Math.min(...xs) - overhang;
-        const maxX = Math.max(...xs) + overhang;
-        const minY = Math.min(...ys) - overhang;
-        const maxY = Math.max(...ys) + overhang;
-
-        const w = maxX - minX;
-        const d = maxY - minY;
-
-        const ridgeH = (Math.min(w, d) / 2) * Math.tan((bldg.roof.slopeDeg || 18) * (Math.PI / 180));
-        const roofGeom = new THREE.BufferGeometry();
-        const midY = (minY + maxY) / 2;
-        const bz = bHeight;
-        const rz = bHeight + ridgeH;
-
-        const verts = new Float32Array([
-          minX, bz, minY,   maxX, bz, minY,   maxX, rz, midY,
-          minX, bz, minY,   maxX, rz, midY,   minX, rz, midY,
-          minX, rz, midY,   maxX, rz, midY,   maxX, bz, maxY,
-          minX, rz, midY,   maxX, bz, maxY,   minX, bz, maxY,
-          minX, bz, minY,   minX, rz, midY,   minX, bz, maxY,
-          maxX, bz, minY,   maxX, bz, maxY,   maxX, rz, midY,
-        ]);
-        roofGeom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-        roofGeom.computeVertexNormals();
-
-        const roofMesh = new THREE.Mesh(roofGeom, mats.charcoal_tile);
-        roofMesh.castShadow = true;
-        roofGroup.add(roofMesh);
-      }
-    }
-
-    // 3. Build Carport Canopy & 2 Parked Cars
-    const cpColMat = mats.dark_wood;
-    const cpPosts = [
-      [6.0, 3.5], [12.0, 3.5], [12.0, 9.5], [6.0, 9.5]
-    ];
-    for (const [px, py] of cpPosts) {
-      const pGeom = new THREE.BoxGeometry(0.2, 2.7, 0.2);
-      const pMesh = new THREE.Mesh(pGeom, cpColMat);
-      pMesh.position.set(px, 1.35, py);
+    // Solid Pillars between south glass doors
+    const southPillars = [-12.1, -8.4, -3.9, 0.6, 2.2];
+    for (const px of southPillars) {
+      const pGeom = new THREE.BoxGeometry(0.35, 3.0, 0.35);
+      const pMesh = new THREE.Mesh(pGeom, mats.white_plaster);
+      pMesh.position.set(px, 1.5, 2.0);
       pMesh.castShadow = true;
-      rootGroup.add(pMesh);
-    }
-    // Carport Canopy Roof
-    const cpRoofGeom = new THREE.BoxGeometry(6.4, 0.1, 6.4);
-    const cpRoofMat = mats.dark_wood;
-    const cpRoofMesh = new THREE.Mesh(cpRoofGeom, cpRoofMat);
-    cpRoofMesh.position.set(9.0, 2.75, 6.5);
-    roofGroup.add(cpRoofMesh);
-
-    // 2 Minimalist Sedans under Carport
-    const carColors = [0x334155, 0xd97706];
-    const carZOffsets = [5.0, 8.0];
-    for (let c = 0; c < 2; c++) {
-      const carGroup = new THREE.Group();
-      // Body
-      const bodyGeom = new THREE.BoxGeometry(4.2, 0.8, 1.8);
-      const bodyMat = new THREE.MeshStandardMaterial({ color: carColors[c], roughness: 0.3, metalness: 0.6 });
-      const bodyMesh = new THREE.Mesh(bodyGeom, bodyMat);
-      bodyMesh.position.set(0, 0.5, 0);
-      bodyMesh.castShadow = true;
-      carGroup.add(bodyMesh);
-      // Cabin
-      const cabinGeom = new THREE.BoxGeometry(2.2, 0.6, 1.6);
-      const cabinMat = mats.window_glass;
-      const cabinMesh = new THREE.Mesh(cabinGeom, cabinMat);
-      cabinMesh.position.set(-0.2, 1.1, 0);
-      carGroup.add(cabinMesh);
-
-      carGroup.position.set(9.0, 0, carZOffsets[c]);
-      rootGroup.add(carGroup);
+      dayWingGroup.add(pMesh);
     }
 
-    // 4. Summer BBQ Terrace Pergola Beams
+    // West Wall of Day Wing
+    const wWallGeom = new THREE.BoxGeometry(0.35, 3.0, 5.2);
+    const wWallMesh = new THREE.Mesh(wWallGeom, mats.white_plaster);
+    wWallMesh.position.set(-12.1, 1.5, -0.6);
+    wWallMesh.castShadow = true;
+    dayWingGroup.add(wWallMesh);
+
+    // East Wall of Day Wing
+    const eWallGeom = new THREE.BoxGeometry(0.35, 3.0, 5.2);
+    const eWallMesh = new THREE.Mesh(eWallGeom, mats.white_plaster);
+    eWallMesh.position.set(2.1, 1.5, -0.6);
+    eWallMesh.castShadow = true;
+    dayWingGroup.add(eWallMesh);
+
+    // Internal Partitions: Kitchen | Living | Dining
+    const intKGeom = new THREE.BoxGeometry(0.15, 3.0, 5.0);
+    const intKMesh = new THREE.Mesh(intKGeom, mats.white_plaster);
+    intKMesh.position.set(-8.5, 1.5, -0.6);
+    dayWingGroup.add(intKMesh);
+
+    const intDGeom = new THREE.BoxGeometry(0.15, 3.0, 5.0);
+    const intDMesh = new THREE.Mesh(intDGeom, mats.white_plaster);
+    intDMesh.position.set(-2.0, 1.5, -0.6);
+    dayWingGroup.add(intDMesh);
+
+    rootGroup.add(dayWingGroup);
+
+    // Villa Night Wing (North-West: Master Bedroom, 2 Baths, Wardrobe, Bed 2, Study - 10.5m x 5.8m)
+    // Center: X = -6.9, Z = -6.1
+    const nightWingGroup = new THREE.Group();
+    const nightFloorGeom = new THREE.BoxGeometry(10.5, 0.05, 5.8);
+    const nightFloorMesh = new THREE.Mesh(nightFloorGeom, mats.parquet);
+    nightFloorMesh.position.set(-6.9, 0.02, -6.1);
+    nightFloorMesh.receiveShadow = true;
+    nightWingGroup.add(nightFloorMesh);
+
+    // North Exterior Wall
+    const nWallGeom = new THREE.BoxGeometry(10.5, 3.0, 0.35);
+    const nWallMesh = new THREE.Mesh(nWallGeom, mats.white_plaster);
+    nWallMesh.position.set(-6.9, 1.5, -9.0);
+    nWallMesh.castShadow = true;
+    nightWingGroup.add(nWallMesh);
+
+    // West Exterior Wall of Night Wing
+    const nwWallGeom = new THREE.BoxGeometry(0.35, 3.0, 5.8);
+    const nwWallMesh = new THREE.Mesh(nwWallGeom, mats.white_plaster);
+    nwWallMesh.position.set(-12.1, 1.5, -6.1);
+    nwWallMesh.castShadow = true;
+    nightWingGroup.add(nwWallMesh);
+
+    // East Exterior Wall of Night Wing
+    const neWallGeom = new THREE.BoxGeometry(0.35, 3.0, 5.8);
+    const neWallMesh = new THREE.Mesh(neWallGeom, mats.white_plaster);
+    neWallMesh.position.set(-1.65, 1.5, -6.1);
+    neWallMesh.castShadow = true;
+    nightWingGroup.add(neWallMesh);
+
+    // Internal Partitions of Night Wing
+    const intN1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.0, 5.5), mats.white_plaster);
+    intN1.position.set(-7.8, 1.5, -6.1);
+    nightWingGroup.add(intN1);
+
+    const intN2 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.0, 5.5), mats.white_plaster);
+    intN2.position.set(-4.5, 1.5, -6.1);
+    nightWingGroup.add(intN2);
+
+    rootGroup.add(nightWingGroup);
+
+    // Charcoal Gable Roof for Main Villa
+    const villaRoofGroup = new THREE.Group();
+    const roof1Geom = new THREE.BoxGeometry(15.2, 0.2, 5.8);
+    const roof1Mesh = new THREE.Mesh(roof1Geom, mats.charcoal_tile);
+    roof1Mesh.position.set(-5.0, 3.4, -0.6);
+    roof1Mesh.castShadow = true;
+    villaRoofGroup.add(roof1Mesh);
+
+    const roof2Geom = new THREE.BoxGeometry(11.2, 0.2, 6.4);
+    const roof2Mesh = new THREE.Mesh(roof2Geom, mats.charcoal_tile);
+    roof2Mesh.position.set(-6.9, 3.4, -6.1);
+    roof2Mesh.castShadow = true;
+    villaRoofGroup.add(roof2Mesh);
+    roofGroup.add(villaRoofGroup);
+
+    // --- 3. SUMMER BBQ TERRACE (5m x 5m) ---
+    // Decking slab at East of Villa (X = 2.2 to 7.2, Z = -3.0 to 2.0)
+    const bbqDeckGeom = new THREE.BoxGeometry(5.0, 0.15, 5.0);
+    const bbqDeckMesh = new THREE.Mesh(bbqDeckGeom, mats.wood_timber);
+    bbqDeckMesh.position.set(4.7, 0.08, -0.5);
+    bbqDeckMesh.receiveShadow = true;
+    rootGroup.add(bbqDeckMesh);
+
+    // Pergola Wooden Beams
+    const pergolaGroup = new THREE.Group();
     for (let b = 0; b < 6; b++) {
       const bGeom = new THREE.BoxGeometry(0.12, 0.2, 5.2);
       const bMesh = new THREE.Mesh(bGeom, mats.wood_timber);
-      bMesh.position.set(2.8 + (b * 0.9), 2.7, -1.0);
+      bMesh.position.set(2.6 + (b * 0.85), 2.8, -0.5);
       bMesh.castShadow = true;
-      roofGroup.add(bMesh);
+      pergolaGroup.add(bMesh);
     }
-
-    // 5. Fire Pit Circle & Flames
-    const fpCircleGeom = new THREE.CylinderGeometry(1.8, 1.8, 0.1, 24);
-    const fpCircleMesh = new THREE.Mesh(fpCircleGeom, mats.asphalt_paver);
-    fpCircleMesh.position.set(-9.0, 0.05, -9.0);
-    rootGroup.add(fpCircleMesh);
-
-    const fpBowlGeom = new THREE.CylinderGeometry(0.6, 0.4, 0.3, 16);
-    const fpBowlMat = mats.dark_wood;
-    const fpBowlMesh = new THREE.Mesh(fpBowlGeom, fpBowlMat);
-    fpBowlMesh.position.set(-9.0, 0.2, -9.0);
-    rootGroup.add(fpBowlMesh);
-
-    const fireLight = new THREE.PointLight(0xff7700, 2.0, 8);
-    fireLight.position.set(-9.0, 0.5, -9.0);
-    rootGroup.add(fireLight);
-
-    // 6. Dendrology: 3D Procedural Trees & Hedges
-    // East Fence Windbreak Hedges (Tuya Smaragd)
-    const tuyaMat = new THREE.MeshStandardMaterial({ color: 0x1e4620, roughness: 0.8 });
-    for (let tz = -10.0; tz <= 10.0; tz += 1.8) {
-      const tGeom = new THREE.ConeGeometry(0.55, 3.2, 8);
-      const tMesh = new THREE.Mesh(tGeom, tuyaMat);
-      tMesh.position.set(14.5, 1.6, tz);
-      tMesh.castShadow = true;
-      rootGroup.add(tMesh);
+    // Pergola Support Posts
+    const pPostCoords = [[2.5, -2.8], [6.9, -2.8], [6.9, 1.8], [2.5, 1.8]];
+    for (const [px, pz] of pPostCoords) {
+      const postMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.8, 0.2), mats.wood_timber);
+      postMesh.position.set(px, 1.4, pz);
+      postMesh.castShadow = true;
+      pergolaGroup.add(postMesh);
     }
+    roofGroup.add(pergolaGroup);
 
-    // Red Barberry & Yellow-Green Dogwood Shrub Clumps
+    // --- 4. FRONT DPK TERRACE (2.5m wide along south facade) ---
+    const frontDeckGeom = new THREE.BoxGeometry(19.4, 0.15, 2.5);
+    const frontDeckMesh = new THREE.Mesh(frontDeckGeom, mats.wood_timber);
+    frontDeckMesh.position.set(-2.5, 0.08, 3.25);
+    frontDeckMesh.receiveShadow = true;
+    rootGroup.add(frontDeckMesh);
+
+    // --- 5. CARPORT (6m x 6m for 2 Cars) ---
+    // Position: X = 3.5 to 9.5, Z = -10.5 to -4.5 (North-East)
+    const carportGroup = new THREE.Group();
+    // 4 Timber Posts
+    const cpPosts = [[3.6, -10.4], [9.4, -10.4], [9.4, -4.6], [3.6, -4.6]];
+    for (const [cx, cz] of cpPosts) {
+      const cpMesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.7, 0.22), mats.dark_wood);
+      cpMesh.position.set(cx, 1.35, cz);
+      cpMesh.castShadow = true;
+      carportGroup.add(cpMesh);
+    }
+    // Canopy Roof
+    const cpRoof = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.12, 6.4), mats.dark_wood);
+    cpRoof.position.set(6.5, 2.75, -7.5);
+    cpRoof.castShadow = true;
+    roofGroup.add(cpRoof);
+
+    // 2 Cars Parked Side-by-Side under Carport
+    const carColors = [0x1e293b, 0xb45309];
+    const carXCoords = [5.0, 8.0];
+    for (let c = 0; c < 2; c++) {
+      const car = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.75, 4.4), new THREE.MeshStandardMaterial({ color: carColors[c], roughness: 0.3, metalness: 0.7 }));
+      body.position.set(0, 0.45, 0);
+      body.castShadow = true;
+      car.add(body);
+
+      const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 2.3), mats.window_glass);
+      cabin.position.set(0, 1.0, -0.2);
+      car.add(cabin);
+
+      car.position.set(carXCoords[c], 0, -7.5);
+      carportGroup.add(car);
+    }
+    rootGroup.add(carportGroup);
+
+    // --- 6. UTILITY SHED & WORKSHOP (3m x 5m) ---
+    // Position: X = 10.5 to 13.5, Z = -1.5 to 3.5 (East)
+    const shedGroup = new THREE.Group();
+    const shedWalls = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.8, 5.0), mats.white_plaster);
+    shedWalls.position.set(12.0, 1.4, 1.0);
+    shedWalls.castShadow = true;
+    shedGroup.add(shedWalls);
+
+    const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.18, 5.4), mats.charcoal_tile);
+    shedRoof.position.set(12.0, 2.9, 1.0);
+    shedRoof.castShadow = true;
+    roofGroup.add(shedRoof);
+    rootGroup.add(shedGroup);
+
+    // --- 7. DRIVEWAY & WALKWAYS (Брусчатка 2.5m) ---
+    // Driveway at East Gate (X = 3.5 to 15.8, Z = -11.5 to -3.5)
+    const driveGeom = new THREE.BoxGeometry(12.4, 0.08, 8.0);
+    const driveMesh = new THREE.Mesh(driveGeom, mats.asphalt_paver);
+    driveMesh.position.set(9.6, 0.01, -7.5);
+    driveMesh.receiveShadow = true;
+    rootGroup.add(driveMesh);
+
+    // Walkway to South Garden and Fire Pit (2.5m wide)
+    const path1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.08, 7.0), mats.asphalt_paver);
+    path1.position.set(-10.5, 0.01, 5.5);
+    path1.receiveShadow = true;
+    rootGroup.add(path1);
+
+    // Walkway connecting Carport and BBQ Terrace
+    const path2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.08, 3.5), mats.asphalt_paver);
+    path2.position.set(6.5, 0.01, -2.5);
+    path2.receiveShadow = true;
+    rootGroup.add(path2);
+
+    // --- 8. FIRE PIT ZONE (4m x 4m Circle at South-West) ---
+    // Position: X = -10.5, Z = 8.5
+    const firePitGroup = new THREE.Group();
+    const fpPatio = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 0.08, 24), mats.asphalt_paver);
+    fpPatio.position.set(-10.5, 0.04, 8.5);
+    firePitGroup.add(fpPatio);
+
+    const fpBowl = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.45, 0.35, 16), mats.dark_wood);
+    fpBowl.position.set(-10.5, 0.22, 8.5);
+    firePitGroup.add(fpBowl);
+
+    // Glowing Warm Fire Light
+    const fpLight = new THREE.PointLight(0xff6600, 3.0, 10);
+    fpLight.position.set(-10.5, 0.5, 8.5);
+    firePitGroup.add(fpLight);
+
+    // 4 Armchairs
+    const chairAngles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
+    for (const ca of chairAngles) {
+      const cx = -10.5 + Math.cos(ca) * 1.35;
+      const cz = 8.5 + Math.sin(ca) * 1.35;
+      const chair = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.55), mats.wood_timber);
+      chair.position.set(cx, 0.25, cz);
+      chair.rotation.y = -ca + Math.PI;
+      firePitGroup.add(chair);
+    }
+    rootGroup.add(firePitGroup);
+
+    // --- 9. DENDROLOGY & 3D BOTANICAL SPECIES (EXACTLY AS ON 2D PLAN) ---
+    // A. EAST FENCE WINDBREAK HEDGE (ул. Черноморская: X = +15.3, Z = -11.5 .. +11.5)
+    // Conical Tuya Smaragd
+    const tuyaMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.85 });
+    for (let tz = -11.0; tz <= 11.0; tz += 1.8) {
+      const tuya = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.2, 8), tuyaMat);
+      tuya.position.set(15.2, 1.6, tz);
+      tuya.castShadow = true;
+      rootGroup.add(tuya);
+    }
+    // Tier of Red Barberry & White Dogwood shrubs along East fence
     const barberryMat = new THREE.MeshStandardMaterial({ color: 0x881337, roughness: 0.85 });
     const dogwoodMat = new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.85 });
-    const shrubCoords = [
-      [13.2, -8.0, barberryMat], [13.2, -4.5, dogwoodMat], [13.2, -1.0, barberryMat],
-      [13.2, 2.5, dogwoodMat], [13.2, 6.0, barberryMat], [13.2, 9.5, dogwoodMat],
-      [-13.5, -7.0, dogwoodMat], [-13.5, -9.0, barberryMat], [-6.0, -10.5, dogwoodMat]
+    for (let sz = -10.0; sz <= 10.0; sz += 2.2) {
+      const sMat = (Math.round(sz) % 2 === 0) ? barberryMat : dogwoodMat;
+      const shrub = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), sMat);
+      shrub.scale.set(1.0, 0.8, 1.0);
+      shrub.position.set(14.0, 0.45, sz);
+      shrub.castShadow = true;
+      rootGroup.add(shrub);
+    }
+
+    // B. SOUTH FENCE HEDGE (Z = +11.8, X = -14.0 .. +14.0)
+    for (let sx = -14.0; sx <= 14.0; sx += 2.0) {
+      const sMat = (Math.round(sx) % 2 === 0) ? dogwoodMat : barberryMat;
+      const shrub = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), sMat);
+      shrub.position.set(sx, 0.4, 11.8);
+      shrub.castShadow = true;
+      rootGroup.add(shrub);
+    }
+
+    // C. CRIMEAN PINES (Сосна «Нана») & TREES (West Border & Fire Pit Corner)
+    const pineMat = new THREE.MeshStandardMaterial({ color: 0x0f3b1e, roughness: 0.9 });
+    const pinePositions = [
+      [-14.5, -10.5], [-14.5, -5.0], [-14.5, 6.0], [-14.5, 10.5], [-6.0, 11.0]
     ];
-    for (const [sx, sz, sMat] of shrubCoords as any) {
-      const sGeom = new THREE.SphereGeometry(0.65, 8, 6);
-      const sMesh = new THREE.Mesh(sGeom, sMat);
-      sMesh.scale.set(1.0, 0.8, 1.0);
-      sMesh.position.set(sx, 0.5, sz);
-      sMesh.castShadow = true;
-      rootGroup.add(sMesh);
-    }
-
-    // Crimean Pines (Сосна Нана)
-    const pineMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.9 });
-    const pineTrunkMat = mats.dark_wood;
-    const pinePositions = [[-13.5, -4.0], [-13.5, 3.0], [-13.5, 8.5], [3.5, 9.5]];
     for (const [px, pz] of pinePositions) {
-      // Trunk
-      const trGeom = new THREE.CylinderGeometry(0.12, 0.15, 1.2, 6);
-      const trMesh = new THREE.Mesh(trGeom, pineTrunkMat);
-      trMesh.position.set(px, 0.6, pz);
-      rootGroup.add(trMesh);
-      // Crown
-      const crGeom = new THREE.SphereGeometry(1.2, 10, 8);
-      const crMesh = new THREE.Mesh(crGeom, pineMat);
-      crMesh.scale.set(1.2, 0.7, 1.2);
-      crMesh.position.set(px, 1.8, pz);
-      crMesh.castShadow = true;
-      rootGroup.add(crMesh);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.4, 6), mats.dark_wood);
+      trunk.position.set(px, 0.7, pz);
+      rootGroup.add(trunk);
+
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(1.3, 10, 8), pineMat);
+      crown.scale.set(1.2, 0.75, 1.2);
+      crown.position.set(px, 2.0, pz);
+      crown.castShadow = true;
+      rootGroup.add(crown);
     }
 
-    // Lavender Clumps
+    // D. LAVENDER BORDER CLUMPS (Along terrace & paths)
     const lavMat = new THREE.MeshStandardMaterial({ color: 0x7c3aed, roughness: 0.8 });
-    for (let lz = -4.0; lz <= 0.0; lz += 0.9) {
-      const lavGeom = new THREE.SphereGeometry(0.35, 6, 5);
-      const lavMesh = new THREE.Mesh(lavGeom, lavMat);
-      lavMesh.scale.set(1.0, 0.5, 1.0);
-      lavMesh.position.set(-1.2, 0.2, lz);
-      rootGroup.add(lavMesh);
+    for (let lx = -11.5; lx <= 3.0; lx += 1.2) {
+      const lav = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5), lavMat);
+      lav.scale.set(1.0, 0.6, 1.0);
+      lav.position.set(lx, 0.15, 4.6);
+      rootGroup.add(lav);
     }
 
-    // Set initial camera to center the entire 32x25m estate
-    camera.position.set(0, 24, 28);
+    // Initial Camera Positioning (Viewing the estate from South/Front)
+    camera.position.set(0, 22, 26);
     camera.lookAt(0, 0, 0);
 
     // Interactive Drag & Orbit
     let isDragging = false;
     let prevMousePos = { x: 0, y: 0 };
-    let rotY = -0.4;
-    let rotX = 0.55;
-    let zoom = 32;
+    let rotY = 0.0;
+    let rotX = 0.6;
+    let zoom = 30;
 
     const onMouseDown = (e: MouseEvent) => {
       isDragging = true;
