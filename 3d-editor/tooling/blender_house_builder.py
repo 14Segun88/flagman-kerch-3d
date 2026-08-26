@@ -90,10 +90,11 @@ def create_pbr_material(name, color_hex, roughness=0.5, metallic=0.0, is_glass=F
 
 
 def setup_materials_catalog():
-    """Initializes the PBR material catalog matching the website."""
+    """Initializes the PBR material catalog matching the website & landscape taxonomy."""
     return {
         "white_plaster": create_pbr_material("Mat_WhitePlaster", "#faf6f0", roughness=0.85),
         "wood_timber": create_pbr_material("Mat_WoodTimber", "#c58c3a", roughness=0.55),
+        "dpk_decking": create_pbr_material("Mat_DPKDecking", "#c26d38", roughness=0.5),
         "red_brick": create_pbr_material("Mat_RedBrick", "#9e3b34", roughness=0.8),
         "dark_wood": create_pbr_material("Mat_DarkWood", "#3e2d27", roughness=0.45),
         "charcoal_tile": create_pbr_material("Mat_RoofCharcoal", "#242424", roughness=0.4, metallic=0.15),
@@ -107,6 +108,13 @@ def setup_materials_catalog():
         "pool_water": create_pbr_material("Mat_PoolWater", "#5b9bd5", roughness=0.1, is_water=True),
         "asphalt_paver": create_pbr_material("Mat_Asphalt", "#2b2b2b", roughness=0.85),
         "concrete_slab": create_pbr_material("Mat_ConcreteSlab", "#d4d4d4", roughness=0.7),
+        "gravel": create_pbr_material("Mat_GraniteGravel", "#9ca3af", roughness=0.9),
+        "foliage_pine": create_pbr_material("Mat_FoliagePine", "#1a4329", roughness=0.7),
+        "foliage_thuja": create_pbr_material("Mat_FoliageThuja", "#165b33", roughness=0.75),
+        "foliage_deciduous": create_pbr_material("Mat_FoliageDeciduous", "#4d7c0f", roughness=0.8),
+        "foliage_barberry": create_pbr_material("Mat_FoliageBarberry", "#881337", roughness=0.8),
+        "foliage_lavender": create_pbr_material("Mat_FoliageLavender", "#7c3aed", roughness=0.85),
+        "trunk_bark": create_pbr_material("Mat_TrunkBark", "#422006", roughness=0.9),
     }
 
 
@@ -373,6 +381,121 @@ def setup_lighting_and_camera(bounds_center=(0, 0, 0), scene_radius=15.0):
     bpy.context.scene.camera = cam_obj
 
 
+def build_procedural_tree(plant_data, materials):
+    """Builds realistic 3D tree/shrub geometry matching dendro species."""
+    pos = plant_data.get('position', [0, 0])
+    px, py = float(pos[0]), float(pos[1])
+    crown_d = float(plant_data.get('crown_diameter_m', 2.5))
+    crown_r = max(0.4, crown_d / 2.0)
+    height = float(plant_data.get('height_m', 3.0))
+    species = str(plant_data.get('species', plant_data.get('species_ru', 'thuja'))).lower()
+
+    # 1. Thuja / Pyramidal conifer (Туя Смарагд)
+    if 'thuja' in species or 'туя' in species:
+        foliage_mat = materials.get('foliage_thuja', materials['foliage_pine'])
+        bpy.ops.mesh.primitive_cone_add(
+            vertices=12,
+            radius1=crown_r,
+            radius2=0.05,
+            depth=height,
+            location=(px, py, height / 2.0)
+        )
+        tree_obj = bpy.context.active_object
+        tree_obj.name = f"Tree_Thuja_{px:.1f}_{py:.1f}"
+        if foliage_mat:
+            tree_obj.data.materials.append(foliage_mat)
+        return tree_obj
+
+    # 2. Pine / Spherical conifer (Сосна «Нана»)
+    elif 'pine' in species or 'сосн' in species or 'pinus' in species:
+        foliage_mat = materials.get('foliage_pine', materials['foliage_pine'])
+        trunk_mat = materials.get('trunk_bark', materials['dark_wood'])
+        
+        # Trunk
+        bpy.ops.mesh.primitive_cylinder_add(
+            vertices=8,
+            radius=0.12,
+            depth=height * 0.4,
+            location=(px, py, height * 0.2)
+        )
+        trunk_obj = bpy.context.active_object
+        if trunk_mat:
+            trunk_obj.data.materials.append(trunk_mat)
+
+        # Flattened spherical crown
+        bpy.ops.mesh.primitive_uv_sphere_add(
+            segments=12,
+            ring_count=8,
+            radius=crown_r,
+            location=(px, py, height * 0.65)
+        )
+        crown_obj = bpy.context.active_object
+        crown_obj.name = f"Tree_Pine_{px:.1f}_{py:.1f}"
+        crown_obj.scale = (1.0, 1.0, 0.7)
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        if foliage_mat:
+            crown_obj.data.materials.append(foliage_mat)
+        return crown_obj
+
+    # 3. Barberry / Red Shrub (Барбарис)
+    elif 'barberry' in species or 'барбарис' in species or 'berberis' in species:
+        foliage_mat = materials.get('foliage_barberry', materials['foliage_deciduous'])
+        bpy.ops.mesh.primitive_uv_sphere_add(
+            segments=10,
+            ring_count=6,
+            radius=crown_r,
+            location=(px, py, crown_r * 0.8)
+        )
+        bush_obj = bpy.context.active_object
+        bush_obj.name = f"Bush_Barberry_{px:.1f}_{py:.1f}"
+        if foliage_mat:
+            bush_obj.data.materials.append(foliage_mat)
+        return bush_obj
+
+    # 4. Lavender / Perennial Clump (Лаванда)
+    elif 'lavender' in species or 'лаванда' in species or 'nepeta' in species or 'котовник' in species:
+        foliage_mat = materials.get('foliage_lavender', materials['foliage_deciduous'])
+        bpy.ops.mesh.primitive_uv_sphere_add(
+            segments=8,
+            ring_count=6,
+            radius=crown_r,
+            location=(px, py, crown_r * 0.6)
+        )
+        lav_obj = bpy.context.active_object
+        lav_obj.name = f"Perennial_Lavender_{px:.1f}_{py:.1f}"
+        lav_obj.scale = (1.0, 1.0, 0.5)
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        if foliage_mat:
+            lav_obj.data.materials.append(foliage_mat)
+        return lav_obj
+
+    # 5. Deciduous (Дёрен белый / Спирея / Лиственные)
+    else:
+        foliage_mat = materials.get('foliage_deciduous', materials['grass_lawn'])
+        trunk_mat = materials.get('trunk_bark', materials['dark_wood'])
+        bpy.ops.mesh.primitive_cylinder_add(
+            vertices=8,
+            radius=0.08,
+            depth=height * 0.35,
+            location=(px, py, height * 0.17)
+        )
+        trunk = bpy.context.active_object
+        if trunk_mat:
+            trunk.data.materials.append(trunk_mat)
+
+        bpy.ops.mesh.primitive_uv_sphere_add(
+            segments=12,
+            ring_count=8,
+            radius=crown_r,
+            location=(px, py, height * 0.6)
+        )
+        crown = bpy.context.active_object
+        crown.name = f"Tree_Deciduous_{px:.1f}_{py:.1f}"
+        if foliage_mat:
+            crown.data.materials.append(foliage_mat)
+        return crown
+
+
 def assemble_scene_from_json(json_path, output_glb_path, render_image_path=None):
     """Main pipeline execution: loads JSON, builds geometry, and exports GLB."""
     print(f"🚀 [Blender] Loading floorplan data from: {json_path}")
@@ -382,9 +505,16 @@ def assemble_scene_from_json(json_path, output_glb_path, render_image_path=None)
     clear_scene()
     materials = setup_materials_catalog()
 
-    # 1. Build Site Elements (Lawn, Pool, Parking Slabs)
+    # 1. Build Site Elements (Lawn, Pool, Parking, Decking Slabs)
     for elem in data.get('siteElements', []):
         mat_key = elem.get('material', 'concrete_slab')
+        if 'dpk' in mat_key or 'decking' in elem.get('type', ''):
+            mat_key = 'dpk_decking'
+        elif 'gravel' in mat_key:
+            mat_key = 'gravel'
+        elif 'paver' in mat_key or 'parking' in elem.get('type', ''):
+            mat_key = 'asphalt_paver'
+        
         mat = materials.get(mat_key, materials['concrete_slab'])
         poly = elem.get('polygon', [])
         thickness = 1.5 if elem.get('type') == 'water' else 0.1
@@ -426,6 +556,10 @@ def assemble_scene_from_json(json_path, output_glb_path, render_image_path=None)
         roof_mat_key = bldg.get('roof', {}).get('material', 'charcoal_tile')
         roof_mat = materials.get(roof_mat_key, materials['charcoal_tile'])
         build_gable_roof(bldg, roof_mat)
+
+    # 3. Build Procedural Plants (Trees, Shrubs, Perennials)
+    for plant_data in data.get('plants', []):
+        build_procedural_tree(plant_data, materials)
 
     # 3. Environment & Lighting
     setup_lighting_and_camera()

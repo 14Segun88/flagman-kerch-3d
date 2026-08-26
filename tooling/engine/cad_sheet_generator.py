@@ -12,6 +12,7 @@ from PIL import Image, ImageDraw
 from .scene_graph import LandscapeSceneGraph, BuildingNode, PavingZoneNode, PlantNode, MafNode
 from .font_helper import get_cyrillic_font
 from .text_utils import fit_text_in_box
+from .dendro_symbol_library import DendroSymbolLibrary
 
 
 class CadSheetGenerator:
@@ -155,28 +156,29 @@ class CadSheetGenerator:
         self._draw_sheet_frame(draw, 7, "План дорожно-тропиночной сети (ДТС)")
         self._draw_boundary(draw, fill_color="#f8fafc")
 
+        # 1. Draw hatched paving zones
         for p in self.scene.paving_zones:
             poly = [self.world_to_screen(pt[0], pt[1]) for pt in p.polygon]
-            is_dpk = "dpk" in p.material or "decking" in p.type
-            fill_col = "#fed7aa" if is_dpk else "#cbd5e1"
-            outline_col = "#ea580c" if is_dpk else "#475569"
-            draw.polygon(poly, fill=fill_col, outline=outline_col, width=2)
+            DendroSymbolLibrary.apply_material_hatch(draw, poly, p.material or p.type)
 
+        # 2. Draw buildings
         for b in self.scene.buildings:
             poly = [self.world_to_screen(pt[0], pt[1]) for pt in b.get_polygon()]
             draw.polygon(poly, fill="#e2e8f0", outline="#1e293b", width=2)
 
+        # 3. Explication table
         tep = self.scene.calculate_tep_summary()
         ex_x = self.PAGE_WIDTH - 380
         ex_y = 120
-        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 200)], fill="#f8fafc", outline="#cbd5e1", width=1)
+        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 220)], fill="#f8fafc", outline="#cbd5e1", width=1)
         draw.text((ex_x + 10, ex_y + 10), "Ведомость покрытий ДТС:", fill="#0f172a", font=self.f_sub)
         draw.text((ex_x + 10, ex_y + 35), f"🟧 Декинг ДПК (настилы): {tep['S_paving_dpk']} м²", fill="#ea580c", font=self.f_body)
-        draw.text((ex_x + 10, ex_y + 55), "   (террасная доска, h=+8 см)", fill="#64748b", font=self.f_small)
-        draw.text((ex_x + 10, ex_y + 80), f"⬜ Отсыпка гранитная: {tep['S_paving_gravel']} м²", fill="#475569", font=self.f_body)
-        draw.text((ex_x + 10, ex_y + 100), "   (фр. 5-20 мм, слой 5-10 см)", fill="#64748b", font=self.f_small)
-        draw.text((ex_x + 10, ex_y + 130), f"• Итого площадь ДТС: {tep['S_paving_total']} м²", fill="#0f172a", font=self.f_sub)
-        draw.text((ex_x + 10, ex_y + 160), "Уклон для стока: i = 0.015-0.020", fill="#0369a1", font=self.f_body)
+        draw.text((ex_x + 10, ex_y + 55), "   (террасная доска, h=+8 см, параллельная укладка)", fill="#64748b", font=self.f_small)
+        draw.text((ex_x + 10, ex_y + 75), f"⬜ Отсыпка гранитная: {tep['S_paving_gravel']} м²", fill="#475569", font=self.f_body)
+        draw.text((ex_x + 10, ex_y + 95), "   (фр. 5-20 мм, слой 5-10 см)", fill="#64748b", font=self.f_small)
+        draw.text((ex_x + 10, ex_y + 115), f"🧱 Брусчатка въезда/парковки: {tep.get('S_paving_paver', 85.0):.1f} м²", fill="#0f172a", font=self.f_body)
+        draw.text((ex_x + 10, ex_y + 145), f"• Итого площадь ДТС: {tep['S_paving_total']} м²", fill="#0f172a", font=self.f_sub)
+        draw.text((ex_x + 10, ex_y + 175), "Уклон для стока: i = 0.015-0.020 (1.5-2%)", fill="#0369a1", font=self.f_body)
 
         img.save(str(output_png), "PNG")
         return output_png
@@ -197,30 +199,33 @@ class CadSheetGenerator:
             poly = [self.world_to_screen(pt[0], pt[1]) for pt in b.get_polygon()]
             draw.polygon(poly, fill="#e2e8f0", outline="#1e293b", width=1)
 
-        for pl in self.scene.plants:
+        for idx, pl in enumerate(self.scene.plants, 1):
             sx, sy = self.world_to_screen(pl.position[0], pl.position[1])
             rad_px = (pl.crown_diameter_m / 2) * self.scale_ppm
-            
-            col_map = {"conifer": "#15803d", "deciduous": "#84cc16", "perennial": "#a855f7"}
-            fill_c = col_map.get(pl.category, "#15803d")
-
-            draw.ellipse([(sx - rad_px, sy - rad_px), (sx + rad_px, sy + rad_px)], fill=None, outline=fill_c, width=2)
-            draw.point((sx, sy), fill=fill_c)
-            draw.text((sx - 6, sy - 6), pl.symbol_code, fill="#0f172a", font=self.f_bold_small)
+            DendroSymbolLibrary.draw_plant_symbol(
+                draw,
+                (sx, sy),
+                rad_px,
+                pl.species_lat or pl.species_ru,
+                index_num=idx,
+                font=self.f_small,
+            )
 
         ex_x = self.PAGE_WIDTH - 380
         ex_y = 120
-        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 320)], fill="#f8fafc", outline="#cbd5e1", width=1)
+        draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 340)], fill="#f8fafc", outline="#cbd5e1", width=1)
         draw.text((ex_x + 10, ex_y + 10), "Условные обозначения растений:", fill="#0f172a", font=self.f_sub)
         
         y_cursor = ex_y + 35
         drawn_symbols = set()
-        for pl in self.scene.plants:
-            if pl.symbol_code not in drawn_symbols:
-                drawn_symbols.add(pl.symbol_code)
-                draw.text((ex_x + 10, y_cursor), f"[{pl.symbol_code}] {pl.species_ru}", fill="#334155", font=self.f_body)
-                draw.text((ex_x + 20, y_cursor + 16), f"({pl.species_lat})", fill="#64748b", font=self.f_small)
-                y_cursor += 36
+        for idx, pl in enumerate(self.scene.plants, 1):
+            style = DendroSymbolLibrary.get_plant_style(pl.species_lat or pl.species_ru)
+            code = style["code"]
+            if code not in drawn_symbols:
+                drawn_symbols.add(code)
+                draw.text((ex_x + 10, y_cursor), f"[{code}] {pl.species_ru}", fill="#0f172a", font=self.f_bold_small)
+                draw.text((ex_x + 20, y_cursor + 14), f"({pl.species_lat or 'Крымский адаптированный сорт'})", fill="#64748b", font=self.f_small)
+                y_cursor += 34
 
         img.save(str(output_png), "PNG")
         return output_png
@@ -246,14 +251,13 @@ class CadSheetGenerator:
         # Draw planting centers with crosshairs + coordinate leader lines
         for idx, pl in enumerate(self.scene.plants, 1):
             sx, sy = self.world_to_screen(pl.position[0], pl.position[1])
-            # Draw planting pit circle
-            pit_rad = max(6, int((pl.crown_diameter_m / 2) * self.scale_ppm * 0.7))
-            draw.ellipse([(sx - pit_rad, sy - pit_rad), (sx + pit_rad, sy + pit_rad)], outline="#166534", width=2)
-            # Center cross
-            draw.line([(sx - 4, sy), (sx + 4, sy)], fill="#166534", width=1)
-            draw.line([(sx, sy - 4), (sx, sy + 4)], fill="#166534", width=1)
+            rad_px = (pl.crown_diameter_m / 2) * self.scale_ppm
+            
+            # Draw semi-transparent plant outline
+            DendroSymbolLibrary.draw_plant_symbol(draw, (sx, sy), rad_px, pl.species_lat or pl.species_ru)
+            
             # Position coordinate tag
-            draw.text((sx + 5, sy - 8), f"№{idx} ({pl.position[0]:.1f}; {pl.position[1]:.1f})", fill="#1e293b", font=self.f_small)
+            draw.text((sx + rad_px * 0.7, sy - 14), f"№{idx} ({pl.position[0]:.1f}; {pl.position[1]:.1f})", fill="#0f172a", font=self.f_small)
 
         # Explication: Посадочная ведомость
         ex_x = self.PAGE_WIDTH - 380
@@ -262,19 +266,21 @@ class CadSheetGenerator:
         draw.text((ex_x + 10, ex_y + 10), "Посадочная ведомость:", fill="#0f172a", font=self.f_sub)
 
         # Table header
-        draw.text((ex_x + 10, ex_y + 35), "№  Наименование породы         Кол-во   Яма (м)", fill="#475569", font=self.f_small)
+        draw.text((ex_x + 10, ex_y + 35), "№  Код   Наименование породы         Кол-во   Яма (м)", fill="#475569", font=self.f_small)
         draw.line([(ex_x + 10, ex_y + 50), (ex_x + 340, ex_y + 50)], fill="#cbd5e1", width=1)
 
         y_cursor = ex_y + 56
         for idx, pl in enumerate(self.scene.plants, 1):
+            style = DendroSymbolLibrary.get_plant_style(pl.species_lat or pl.species_ru)
+            code = style["code"]
             pit_d = "0.8×0.8" if pl.category == "conifer" else "0.6×0.6" if pl.category == "deciduous" else "0.4×0.4"
-            line_str = f"{idx:<2} {pl.species_ru[:20]:<20} 1 шт   {pit_d}"
+            line_str = f"{idx:<2} {code:<4} {pl.species_ru[:17]:<17} 1 шт    {pit_d}"
             draw.text((ex_x + 10, y_cursor), line_str, fill="#1e293b", font=self.f_small)
             y_cursor += 20
 
         # Note at the bottom of table
         draw.line([(ex_x + 10, y_cursor + 5), (ex_x + 340, y_cursor + 5)], fill="#cbd5e1", width=1)
-        draw.text((ex_x + 10, y_cursor + 12), "* Посадочный грунт: торф/песок 1:1 + биогумус", fill="#047857", font=self.f_small)
+        draw.text((ex_x + 10, y_cursor + 12), "* Посадочный субстрат: чернозем/песок 1:1 + биогумус", fill="#047857", font=self.f_small)
 
         img.save(str(output_png), "PNG")
         return output_png
@@ -292,8 +298,14 @@ class CadSheetGenerator:
             w_px = m.dimensions[0] * self.scale_ppm
             h_px = m.dimensions[1] * self.scale_ppm
 
-            fill_c = "#bae6fd" if m.type == "pool" else "#a5f3fc" if m.type == "hot_tub" else "#fef08a"
-            draw.rectangle([(sx, sy - h_px), (sx + w_px, sy)], fill=fill_c, outline="#0284c7", width=2)
+            poly = [(sx, sy - h_px), (sx + w_px, sy - h_px), (sx + w_px, sy), (sx, sy)]
+            if m.type in ("pool", "hot_tub"):
+                DendroSymbolLibrary.apply_material_hatch(draw, poly, "pool_water")
+            elif "decking" in m.type or "gazebo" in m.type:
+                DendroSymbolLibrary.apply_material_hatch(draw, poly, "dpk")
+            else:
+                draw.rectangle([(sx, sy - h_px), (sx + w_px, sy)], fill="#fef08a", outline="#ca8a04", width=2)
+            
             draw.text((sx + 5, sy - h_px/2 - 6), f"{m.name}\n{m.dimensions[0]}x{m.dimensions[1]}м", fill="#0f172a", font=self.f_small)
 
         for b in self.scene.buildings:
@@ -321,17 +333,23 @@ class CadSheetGenerator:
         self._draw_sheet_frame(draw, 11, "Генеральный план (Master Plan)")
         self._draw_boundary(draw, fill_color="#f0fdf4")
 
+        # 1. Paving zones with architectural hatching
         for p in self.scene.paving_zones:
             poly = [self.world_to_screen(pt[0], pt[1]) for pt in p.polygon]
-            is_dpk = "dpk" in p.material or "decking" in p.type
-            draw.polygon(poly, fill="#fed7aa" if is_dpk else "#e2e8f0", outline="#ea580c" if is_dpk else "#64748b", width=2)
+            DendroSymbolLibrary.apply_material_hatch(draw, poly, p.material or p.type)
 
+        # 2. MAF elements
         for m in self.scene.maf_elements:
             sx, sy = self.world_to_screen(m.position[0], m.position[1])
             w_px = m.dimensions[0] * self.scale_ppm
             h_px = m.dimensions[1] * self.scale_ppm
-            draw.rectangle([(sx, sy - h_px), (sx + w_px, sy)], fill="#bae6fd" if m.type=="pool" else "#fef08a", outline="#0284c7", width=2)
+            poly = [(sx, sy - h_px), (sx + w_px, sy - h_px), (sx + w_px, sy), (sx, sy)]
+            if m.type in ("pool", "hot_tub"):
+                DendroSymbolLibrary.apply_material_hatch(draw, poly, "pool_water")
+            else:
+                draw.rectangle([(sx, sy - h_px), (sx + w_px, sy)], fill="#fef08a", outline="#0284c7", width=2)
 
+        # 3. Buildings
         for idx, b in enumerate(self.scene.buildings, 1):
             poly = [self.world_to_screen(pt[0], pt[1]) for pt in b.get_polygon()]
             draw.polygon(poly, fill="#f8fafc", outline="#0f172a", width=3)
@@ -340,11 +358,20 @@ class CadSheetGenerator:
             draw.ellipse([(cx - 12, cy - 12), (cx + 12, cy + 12)], fill="#0f172a", outline="#ffffff", width=1)
             draw.text((cx - 4, cy - 6), str(idx), fill="#ffffff", font=self.f_bold_small)
 
-        for pl in self.scene.plants:
+        # 4. Plants with rich architectural symbols
+        for idx, pl in enumerate(self.scene.plants, 1):
             sx, sy = self.world_to_screen(pl.position[0], pl.position[1])
             rad_px = (pl.crown_diameter_m / 2) * self.scale_ppm
-            draw.ellipse([(sx - rad_px, sy - rad_px), (sx + rad_px, sy + rad_px)], fill="#15803d", outline="#166534", width=1)
+            DendroSymbolLibrary.draw_plant_symbol(
+                draw,
+                (sx, sy),
+                rad_px,
+                pl.species_lat or pl.species_ru,
+                index_num=idx,
+                font=self.f_small,
+            )
 
+        # 5. General Explication & TEP Table
         ex_x = self.PAGE_WIDTH - 380
         ex_y = 120
         draw.rectangle([(ex_x, ex_y), (ex_x + 350, ex_y + 360)], fill="#f8fafc", outline="#0f172a", width=2)
